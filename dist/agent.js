@@ -9,7 +9,8 @@ import picocolors from "picocolors";
 import { spinner } from "@clack/prompts";
 import crypto from "node:crypto";
 import { createSession, addMessage, saveSession } from "./session.js";
-import { createReadTool, createWriteTool, createEditTool, createCommandTool, createSearchTool, createCrawlTool, } from "./tools.js";
+import { createBatchEditTool } from "./patch.js";
+import { createReadTool, createWriteTool, createEditTool, createCommandTool, createSearchTool, createCrawlTool, createBlastTool, } from "./tools.js";
 // ---------------------------------------------------------------------------
 // createSystemPrompt
 // ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ export function createSystemPrompt(personality, fileCount, userName) {
     if (personality) {
         parts.push(``, `The project has a personality file that describes its conventions and preferences:`, `<personality>`, personality, `</personality>`);
     }
-    parts.push(``, `You have access to the following tools:`, `- read     — Read file contents from the project`, `- write    — Write new files to the project`, `- edit     — Make targeted edits to existing files`, `- command  — Run shell commands in the project directory`, `- search   — Search for files and content in the project`, `- crawl    — Trace import dependencies in TypeScript files`, ``, `Guidelines:`, `- Always explain your plan before executing actions.`, `- Prefer targeted edits over full-file rewrites when making changes.`, `- Ask for clarification when requirements are unclear or ambiguous.`, `- When proposing architectural decisions, explain trade-offs.`, `- If a tool execution fails, communicate the error clearly and suggest alternatives.`, `- Show relevant code snippets when explaining changes.`);
+    parts.push(``, `You have access to the following tools:`, `- read     — Read file contents from the project`, `- write    — Write new files to the project`, `- edit     — Make targeted edits to existing files`, `- command  — Run shell commands in the project directory`, `- search   — Search for files and content in the project`, `- crawl    — Trace import dependencies in TypeScript files`, `- patch    — Apply multiple find-replace edits across files in one call`, `- blast    — Check which files depend on a file before changing it`, ``, `Guidelines:`, `- Always explain your plan before executing actions.`, `- Prefer targeted edits over full-file rewrites when making changes.`, `- Ask for clarification when requirements are unclear or ambiguous.`, `- When proposing architectural decisions, explain trade-offs.`, `- If a tool execution fails, communicate the error clearly and suggest alternatives.`, `- Show relevant code snippets when explaining changes.`);
     return parts.join("\n");
 }
 // ---------------------------------------------------------------------------
@@ -129,6 +130,8 @@ export async function runAgentLoop(userInput, config, personality, fileCount, us
         command: createCommandTool(),
         search: createSearchTool(),
         crawl: createCrawlTool(),
+        patch: createBatchEditTool(),
+        blast: createBlastTool(),
     };
     // -----------------------------------------------------------------------
     // 6. Build message list from session history

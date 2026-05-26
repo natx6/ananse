@@ -6,6 +6,7 @@ import { spinner, text, select, isCancel } from "@clack/prompts";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import * as readline from "node:readline/promises";
 import { execSync } from "node:child_process";
 import { stdin as processStdin, stdout as processStdout } from "node:process";
@@ -18,6 +19,8 @@ import { runBuildLoop } from "./builder.js";
 import { runRefactor } from "./refactor.js";
 import { weaveTypes, weaveDocs } from "./weave.js";
 import { crawlDirectory, formatGraph } from "./cobweb.js";
+import { sortDirectory } from "./sorter.js";
+import { generatePatches, applyPatches } from "./patch.js";
 import {
   listSessions,
   listNamedSessions,
@@ -790,6 +793,36 @@ program
     } catch (e) {
       console.log(picocolors.red(`\n  ${(e as Error).message}`));
     }
+  });
+
+program
+  .command("sort")
+  .description("Sort files into categorized folders")
+  .argument("[path]", "Directory to sort")
+  .action(async (path?: string) => {
+    const dir = path ?? join(homedir(), "Downloads");
+    await sortDirectory(dir);
+  });
+
+program
+  .command("patch")
+  .description("Generate and apply precision code patches via AI")
+  .argument("<file>", "File to patch")
+  .argument("<description>", "What change to make")
+  .action(async (file: string, description: string) => {
+    const config = await readConfigFile();
+    console.log(picocolors.dim("\n  Generating patches...\n"));
+    const patches = await generatePatches(file, description, config as any);
+    if (patches.length === 0) {
+      console.log(picocolors.yellow("  No patches generated.\n"));
+      return;
+    }
+    console.log(`  ${picocolors.cyan(`Generated ${patches.length} patch(es)`)}\n`);
+    const { results } = await applyPatches(patches);
+    for (const r of results) {
+      console.log(`  ${r.startsWith("✓") ? picocolors.green(r) : picocolors.red(r)}`);
+    }
+    console.log("");
   });
 
 program

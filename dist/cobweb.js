@@ -100,6 +100,23 @@ export function formatGraph(graph) {
     return lines.join("\n");
 }
 /**
+ * Compute reverse dependencies — files that import the given target.
+ */
+export function computeReverseDeps(graph, targetPath) {
+    const result = [];
+    for (const [file, deps] of Object.entries(graph)) {
+        if (file === targetPath)
+            continue;
+        for (const dep of deps) {
+            if (dep.resolvedPath === targetPath) {
+                result.push(file);
+                break;
+            }
+        }
+    }
+    return result;
+}
+/**
  * Recursively find all .ts/.tsx files in a directory.
  */
 async function collectFiles(dirPath) {

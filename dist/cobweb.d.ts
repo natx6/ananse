@@ -18,4 +18,8 @@ export declare function crawlDirectory(dirPath: string): Promise<DependencyGraph
  * Pretty-print the dependency graph.
  */
 export declare function formatGraph(graph: DependencyGraph): string;
+/**
+ * Compute reverse dependencies — files that import the given target.
+ */
+export declare function computeReverseDeps(graph: DependencyGraph, targetPath: string): string[];
 //# sourceMappingURL=cobweb.d.ts.map

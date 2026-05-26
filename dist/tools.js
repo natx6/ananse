@@ -6,7 +6,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fastGlob from "fast-glob";
 import { requestPermission } from "./permission.js";
-import { crawlDependencies, crawlDirectory } from "./cobweb.js";
+import { crawlDependencies, crawlDirectory, computeReverseDeps } from "./cobweb.js";
+import { detectAndCondense } from "./diagnose.js";
 const execFileAsync = promisify(execFile);
 const MAX_TIMEOUT_MS = 300_000;
 export function createReadTool() {
@@ -115,7 +116,8 @@ export function createCommandTool() {
                     maxBuffer: 10 * 1024 * 1024,
                 });
                 const output = [stdout, stderr].filter(Boolean).join("\n");
-                return { success: true, data: output || "(no output)" };
+                const condensed = detectAndCondense(output, command);
+                return { success: true, data: (condensed ?? output) || "(no output)" };
             }
             catch (err) {
                 if (err instanceof Error) {
@@ -126,7 +128,8 @@ export function createCommandTool() {
                     const stderr = nodeErr.stderr ?? "";
                     const stdout = nodeErr.stdout ?? "";
                     const combined = [stdout, stderr].filter(Boolean).join("\n");
-                    return { success: false, data: combined, error: nodeErr.message };
+                    const condensed = detectAndCondense(combined, command);
+                    return { success: false, data: condensed ?? combined, error: nodeErr.message };
                 }
                 return { success: false, data: "", error: toErrorMessage(err) };
             }
@@ -187,6 +190,35 @@ export function createCrawlTool() {
                     }
                     return { success: true, data: lines.join("\n") || "No dependencies found." };
                 }
+            }
+            catch (err) {
+                return { success: false, data: "", error: toErrorMessage(err) };
+            }
+        },
+    });
+}
+export function createBlastTool() {
+    return tool({
+        description: "Show all files that depend on a given file (reverse dependencies). Use before modifying a file to understand the blast radius.",
+        inputSchema: z.object({
+            target: z.string().describe("File path to check"),
+        }),
+        execute: async ({ target }) => {
+            try {
+                const resolved = resolve(target);
+                const graph = await crawlDirectory("src/");
+                const reverse = computeReverseDeps(graph, resolved);
+                if (reverse.length === 0) {
+                    return { success: true, data: `No files import ${target} — zero blast radius.` };
+                }
+                const lines = reverse.map((f, i) => {
+                    const isLast = i === reverse.length - 1;
+                    return `${isLast ? "└──" : "├──"} ${f}`;
+                });
+                return {
+                    success: true,
+                    data: `⚠  Blast radius: ${reverse.length} file(s) import ${target}\n${lines.join("\n")}\n\nReview these files if you change ${target}'s public API.`,
+                };
             }
             catch (err) {
                 return { success: false, data: "", error: toErrorMessage(err) };

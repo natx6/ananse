@@ -24,4 +24,7 @@ export declare function createCrawlTool(): import("ai").Tool<{
     target: string;
     mode: "file" | "directory";
 }, ToolResult>;
+export declare function createBlastTool(): import("ai").Tool<{
+    target: string;
+}, ToolResult>;
 //# sourceMappingURL=tools.d.ts.map

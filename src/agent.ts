@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 import type { AnanseConfig } from "./utils.js";
 import type { Message, Session } from "./types.js";
 import { createSession, addMessage, saveSession } from "./session.js";
+import { createBatchEditTool } from "./patch.js";
 import {
   createReadTool,
   createWriteTool,
@@ -20,6 +21,7 @@ import {
   createCommandTool,
   createSearchTool,
   createCrawlTool,
+  createBlastTool,
 } from "./tools.js";
 
 // ---------------------------------------------------------------------------
@@ -65,6 +67,8 @@ export function createSystemPrompt(
     `- command  — Run shell commands in the project directory`,
     `- search   — Search for files and content in the project`,
     `- crawl    — Trace import dependencies in TypeScript files`,
+    `- patch    — Apply multiple find-replace edits across files in one call`,
+    `- blast    — Check which files depend on a file before changing it`,
     ``,
     `Guidelines:`,
     `- Always explain your plan before executing actions.`,
@@ -193,6 +197,8 @@ export async function runAgentLoop(
     command: createCommandTool(),
     search: createSearchTool(),
     crawl: createCrawlTool(),
+    patch: createBatchEditTool(),
+    blast: createBlastTool(),
   };
 
   // -----------------------------------------------------------------------
