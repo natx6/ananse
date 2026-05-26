@@ -252,6 +252,51 @@ const program = new Command()
     .version("0.1.0")
     .action(main);
 program
+    .command("status")
+    .description("Check API status, config, and session storage")
+    .action(async () => {
+    const config = await readConfigFile();
+    const sessions = await listSessions();
+    console.log(picocolors.cyan("\n  ─── Config ───"));
+    console.log(`  Provider:  ${picocolors.white(config.provider ?? picocolors.dim("not set"))}`);
+    console.log(`  Model:     ${picocolors.white(config.model ?? picocolors.dim("default"))}`);
+    console.log(`  Base URL:  ${picocolors.dim(config.baseURL ?? "(default)")}`);
+    console.log(`  API Key:   ${config.apiKey ? picocolors.green(config.apiKey.slice(0, 8) + "…") : picocolors.red("not set")}`);
+    if (config.userName)
+        console.log(`  User:      ${picocolors.white(config.userName)}`);
+    console.log(picocolors.cyan("\n  ─── Storage ───"));
+    console.log(`  Sessions:  ${picocolors.white(String(sessions.length))}`);
+    const totalMsgs = sessions.reduce((sum, s) => sum + s.messages.length, 0);
+    console.log(`  Messages:  ${picocolors.white(String(totalMsgs))}`);
+    console.log(picocolors.cyan("\n  ─── Project ───"));
+    const fileCount = await scanDirectory();
+    console.log(`  Files:     ${picocolors.white(String(fileCount))} in scope`);
+    // Quick API connectivity check
+    if (config.apiKey && config.provider === "openai" && config.baseURL) {
+        console.log(picocolors.cyan("\n  ─── API Check ───"));
+        try {
+            const res = await fetch(`${config.baseURL}/models`, {
+                headers: { Authorization: `Bearer ${config.apiKey}` },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                console.log(`  Status:    ${picocolors.green("connected")}`);
+                console.log(`  Models:    ${picocolors.white(String(data.data?.length ?? "?"))} available`);
+                const remaining = res.headers.get("x-ratelimit-remaining");
+                if (remaining)
+                    console.log(`  Rate limit: ${picocolors.yellow(remaining)} requests remaining`);
+            }
+            else {
+                console.log(`  Status:    ${picocolors.red(`HTTP ${res.status}`)}`);
+            }
+        }
+        catch {
+            console.log(`  Status:    ${picocolors.red("unreachable")}`);
+        }
+    }
+    console.log("");
+});
+program
     .command("configure")
     .description("Set up your AI provider and API key")
     .action(configure);
