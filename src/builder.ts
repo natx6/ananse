@@ -3,6 +3,7 @@ import picocolors from "picocolors";
 
 import type { AnanseConfig } from "./utils.js";
 import { createModelFromConfig } from "./agent.js";
+import { loadPersonality } from "./personality.js";
 import {
   createReadTool,
   createWriteTool,
@@ -30,6 +31,11 @@ export async function runBuildLoop(
     return;
   }
 
+  const personality = await loadPersonality();
+  const personalitySection = personality
+    ? `\nProject personality (conventions, stack, preferences):\n${personality}`
+    : "";
+
   const agent = new ToolLoopAgent({
     model,
     instructions: [
@@ -43,7 +49,8 @@ export async function runBuildLoop(
       "- Repeat until the build succeeds or you hit the step limit.",
       "- When the build succeeds, announce it clearly.",
       "- Be surgical with your fixes — change only what's needed.",
-    ].join("\n"),
+      personalitySection,
+    ].filter(Boolean).join("\n"),
     tools: {
       read: createReadTool(),
       write: createWriteTool(),

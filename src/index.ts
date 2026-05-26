@@ -9,9 +9,10 @@ import { homedir } from "node:os";
 import * as readline from "node:readline/promises";
 import { execSync } from "node:child_process";
 import { stdin as processStdin, stdout as processStdout } from "node:process";
-import { LOGO } from "./branding.js";
+import { LOGO, TAGLINE } from "./branding.js";
 import { checkConfig, scanDirectory } from "./utils.js";
 import { loadPersonality } from "./personality.js";
+import { dangerousMode, setDangerousMode } from "./permission.js";
 import { runAgentLoop } from "./agent.js";
 import { runBuildLoop } from "./builder.js";
 import { weaveTypes, weaveDocs } from "./weave.js";
@@ -22,6 +23,8 @@ import {
   loadSessionByName,
   createSession,
   saveSession,
+  renameSession,
+  deleteSession,
 } from "./session.js";
 
 const CONFIG_DIR = `${homedir()}/.ananse`;
@@ -79,6 +82,9 @@ async function barePrompt(): Promise<string | symbol> {
   try {
     const answer = await rl.question(picocolors.green("> "));
     return answer;
+  } catch {
+    console.log(picocolors.yellow("\nGoodbye."));
+    process.exit(0);
   } finally {
     rl.close();
   }
@@ -87,6 +93,7 @@ async function barePrompt(): Promise<string | symbol> {
 async function main(): Promise<void> {
   console.clear();
   console.log(picocolors.white(LOGO));
+  console.log(picocolors.dim(`  ${TAGLINE}`));
 
   const s = spinner();
   s.start("Weaving local context...");
@@ -101,6 +108,15 @@ async function main(): Promise<void> {
   const fileCount = await scanDirectory();
 
   s.stop(picocolors.green("Context woven successfully"));
+
+  if (dangerousMode) {
+    console.log(picocolors.red(`  ${"═".repeat(46)}`));
+    console.log(picocolors.bold(picocolors.red("  ⚠  DANGEROUS MODE")));
+    console.log(picocolors.red("  Permission prompts are disabled."));
+    console.log(picocolors.red("  The agent can run ANY command and modify ANY file."));
+    console.log(picocolors.red(`  ${"═".repeat(46)}`));
+  }
+
   console.log("");
 
   const summaryParts: string[] = [];
@@ -139,11 +155,21 @@ async function main(): Promise<void> {
 
     if (typeof response !== "string" || !response.trim()) continue;
 
-    console.log(picocolors.green(`You: ${response.trim()}`));
+    const input = response.trim();
+    console.log(picocolors.green(`You: ${input}`));
     const updatedSession = await runAgentLoop(
-      response.trim(), config ?? {}, personality, fileCount, userName, currentSession,
+      input, config ?? {}, personality, fileCount, userName, currentSession,
     );
-    if (updatedSession) currentSession = updatedSession;
+    if (updatedSession) {
+      // Auto-name the session from the first user message
+      if (!updatedSession.name && updatedSession.messages.length > 0) {
+        updatedSession.name = input.length > 55
+          ? input.slice(0, 52).replace(/\s+\S*$/, "") + "…"
+          : input;
+        await saveSession(updatedSession);
+      }
+      currentSession = updatedSession;
+    }
     console.log("");
   }
 }
@@ -225,17 +251,63 @@ async function initPersonality(): Promise<void> {
     return;
   }
 
+  // Auto-detect project stack
+  let language = "";
+  let framework = "";
+  let testTool = "";
+  let pkgManager = "";
+
+  if (existsSync("package.json")) {
+    try {
+      const pkg = JSON.parse(await readFile("package.json", "utf-8"));
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      language = "TypeScript / JavaScript";
+
+      if (deps.next) framework = "Next.js";
+      else if (deps.react || deps["react-dom"]) framework = "React";
+      else if (deps.vue) framework = "Vue";
+      else if (deps.express) framework = "Express";
+
+      if (deps.vitest) testTool = "Vitest";
+      else if (deps.jest) testTool = "Jest";
+      else if (deps.ava) testTool = "AVA";
+      else if (deps.mocha) testTool = "Mocha";
+
+      pkgManager = existsSync("pnpm-lock.yaml") ? "pnpm"
+        : existsSync("yarn.lock") ? "yarn"
+        : existsSync("bun.lock") ? "bun"
+        : "npm";
+    } catch { /* ignore parse errors */ }
+  } else if (existsSync("Cargo.toml")) {
+    language = "Rust";
+    pkgManager = "cargo";
+  } else if (existsSync("pyproject.toml") || existsSync("requirements.txt")) {
+    language = "Python";
+    pkgManager = existsSync("uv.lock") ? "uv" : "pip";
+  } else if (existsSync("go.mod")) {
+    language = "Go";
+    pkgManager = "go mod";
+  } else if (existsSync("Gemfile")) {
+    language = "Ruby";
+    pkgManager = "bundler";
+  }
+
+  const autoDetected = [
+    language ? `- Language: ${language}` : null,
+    framework ? `- Framework: ${framework}` : null,
+    testTool ? `- Testing: ${testTool}` : null,
+    pkgManager ? `- Package manager: ${pkgManager}` : null,
+  ].filter(Boolean).join("\n");
+
+  const stackSection = autoDetected
+    ? `## Stack\n\n${autoDetected}\n`
+    : `## Stack\n\n- Language: (e.g., TypeScript, Python, Rust)\n- Framework: (e.g., React, Next.js, Django)\n- Testing: (e.g., Vitest, pytest)\n- Package manager: (e.g., npm, pip, cargo)\n`;
+
   const template = `# Project Personality
 
 This file tells Ananse about your project's conventions, stack, and preferences.
 
-## Stack
-
-- Language: (e.g., TypeScript, Python, Rust)
-- Framework: (e.g., React, Next.js, Django)
-- Testing: (e.g., Vitest, pytest)
-- Package manager: (e.g., npm, pip, cargo)
-
+${stackSection}
 ## Conventions
 
 - (e.g., use functional components, prefer async/await, naming conventions)
@@ -247,25 +319,52 @@ This file tells Ananse about your project's conventions, stack, and preferences.
 
   await writeFile(path, template, "utf-8");
   console.log(picocolors.green("Created .ananse.md"));
-  console.log(picocolors.dim("  Edit it to describe your project's conventions."));
+  if (language) {
+    console.log(picocolors.dim(`  Detected: ${language}${framework ? ` + ${framework}` : ""}${testTool ? ` + ${testTool}` : ""}`));
+  } else {
+    console.log(picocolors.dim("  Edit it to describe your project's conventions."));
+  }
 }
 
 async function sessionsCommand(): Promise<void> {
-  const sessions = await listSessions();
+  const all = await listSessions();
+  // Filter out sessions with 0 messages — they're empty shells from spin
+  const sessions = all.filter((s) => s.messages.length > 0);
   if (sessions.length === 0) {
-    console.log(picocolors.yellow("No sessions found."));
+    console.log(picocolors.yellow("\n  No conversation sessions yet. Start one with `ananse`."));
+    console.log("");
     return;
   }
 
-  const options = sessions.map((s) => {
-    const date = new Date(s.updatedAt).toLocaleString();
-    const msgs = s.messages.length;
-    const preview = s.messages.find((m) => m.role === "user")?.content.slice(0, 60) ?? "";
-    return {
-      value: s.id,
-      label: `${picocolors.cyan(date)}  ${picocolors.dim(`${msgs} msgs`)}  ${picocolors.dim(preview)}`,
-    };
-  });
+  // Group: named sessions first, then unnamed
+  const named = sessions.filter((s) => s.name);
+  const unnamed = sessions.filter((s) => !s.name);
+
+  const options: { value: string; label: string }[] = [];
+
+  if (named.length > 0) {
+    for (const s of named) {
+      const date = new Date(s.updatedAt).toLocaleString();
+      const msgs = s.messages.length;
+      const lastPreview = [...s.messages].reverse().find((m) => m.role === "user")?.content.slice(0, 55) ?? "";
+      options.push({
+        value: s.id,
+        label: `${picocolors.cyan(s.name!)}  ${picocolors.dim(`${msgs} msgs`)}  ${picocolors.dim(date)}`,
+      });
+    }
+  }
+
+  if (unnamed.length > 0) {
+    for (const s of unnamed) {
+      const date = new Date(s.updatedAt).toLocaleString();
+      const msgs = s.messages.length;
+      const preview = s.messages.find((m) => m.role === "user")?.content.slice(0, 55) ?? "";
+      options.push({
+        value: s.id,
+        label: `${picocolors.dim(preview)}  ${picocolors.dim(`${msgs} msgs`)}  ${picocolors.dim(date)}`,
+      });
+    }
+  }
 
   const picked = await select({
     message: "Select a session:",
@@ -277,10 +376,10 @@ async function sessionsCommand(): Promise<void> {
   const session = sessions.find((s) => s.id === picked);
   if (!session) return;
 
-  console.log(picocolors.cyan(`\n  Session: ${session.id}`));
+  console.log(picocolors.cyan(`\n  ─── ${session.name ?? "Session"} ───`));
   for (const msg of session.messages) {
-    const role = msg.role === "user" ? picocolors.green("you") : picocolors.blue("anse");
-    const content = msg.content.slice(0, 200);
+    const role = msg.role === "user" ? picocolors.green("you") : msg.role === "assistant" ? picocolors.blue("anse") : picocolors.yellow("tool");
+    const content = msg.content.slice(0, 250);
     console.log(`  ${role}: ${picocolors.dim(content)}`);
   }
   console.log("");
@@ -290,6 +389,13 @@ const program = new Command()
   .name("ananse")
   .description("AI agent for coding tasks")
   .version("0.1.0")
+  .option("-d, --dangerously-skip-permissions", "Skip all permission prompts (use with care)")
+  .hook("preAction", (thisCmd) => {
+    const opts = thisCmd.optsWithGlobals();
+    if (opts.dangerouslySkipPermissions) {
+      setDangerousMode(true);
+    }
+  })
   .action(main);
 
 program
@@ -298,41 +404,108 @@ program
   .action(async () => {
     const config = await readConfigFile();
     const sessions = await listSessions();
-
-    console.log(picocolors.cyan("\n  ─── Config ───"));
-    console.log(`  Provider:  ${picocolors.white(config.provider ?? picocolors.dim("not set"))}`);
-    console.log(`  Model:     ${picocolors.white(config.model ?? picocolors.dim("default"))}`);
-    console.log(`  Base URL:  ${picocolors.dim(config.baseURL ?? "(default)" )}`);
-    console.log(`  API Key:   ${config.apiKey ? picocolors.green(config.apiKey.slice(0, 8) + "…") : picocolors.red("not set")}`);
-    if (config.userName) console.log(`  User:      ${picocolors.white(config.userName)}`);
-
-    console.log(picocolors.cyan("\n  ─── Storage ───"));
-    console.log(`  Sessions:  ${picocolors.white(String(sessions.length))}`);
+    const namedSessions = await listNamedSessions();
     const totalMsgs = sessions.reduce((sum, s) => sum + s.messages.length, 0);
-    console.log(`  Messages:  ${picocolors.white(String(totalMsgs))}`);
+    const avgMsgs = sessions.length ? Math.round(totalMsgs / sessions.length) : 0;
 
-    console.log(picocolors.cyan("\n  ─── Project ───"));
+    // System
+    console.log(picocolors.cyan("\n  ╭── System ──"));
+    console.log(`  ├── ${picocolors.bold("Ananse")}    v0.1.0`);
+    console.log(`  ├── Node.js   ${picocolors.white(process.version)}`);
+    console.log(`  ├── Platform  ${picocolors.white(`${process.platform}/${process.arch}`)}`);
+
+    try {
+      const branch = execSync("git branch --show-current", { encoding: "utf-8" }).trim();
+      const commit = execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
+      const remote = execSync("git config remote.origin.url", { encoding: "utf-8" }).trim();
+      console.log(`  ├── Git       ${picocolors.white(branch)} @ ${picocolors.dim(commit)}`);
+      console.log(`  ├── Remote    ${picocolors.dim(remote)}`);
+    } catch {
+      console.log(`  ├── Git       ${picocolors.dim("not a git repo")}`);
+    }
+    console.log(`  └── Danger    ${dangerousMode ? picocolors.red("ON") : picocolors.dim("OFF")}`);
+
+    // Config
+    console.log(picocolors.cyan("\n  ╭── Config ──"));
+    console.log(`  ├── Provider  ${picocolors.white(config.provider ?? picocolors.dim("not set"))}`);
+    console.log(`  ├── Model     ${picocolors.white(config.model ?? picocolors.dim("default"))}`);
+    console.log(`  ├── Endpoint  ${picocolors.dim(config.baseURL ?? "(default)")}`);
+    if (config.apiKey) {
+      const key = config.apiKey;
+      const masked = key.length > 16
+        ? key.slice(0, 12) + picocolors.dim("…") + key.slice(-4)
+        : key.slice(0, 8) + picocolors.dim("…");
+      console.log(`  ├── API Key   ${picocolors.green(masked)}`);
+    } else {
+      console.log(`  ├── API Key   ${picocolors.red("not set")}`);
+    }
+    if (config.userName) {
+      console.log(`  └── User      ${picocolors.white(config.userName)}`);
+    } else {
+      console.log(`  └── User      ${picocolors.dim("not set")}`);
+    }
+
+    // Storage
+    console.log(picocolors.cyan("\n  ╭── Storage ──"));
+    console.log(`  ├── Sessions  ${picocolors.white(String(sessions.length))} total (${picocolors.white(String(namedSessions.length))} named)`);
+    console.log(`  ├── Messages  ${picocolors.white(String(totalMsgs))} total, ${picocolors.white(String(avgMsgs))} avg/session`);
+    if (sessions.length > 0) {
+      const latest = new Date(sessions[0].updatedAt).toLocaleString();
+      console.log(`  ├── Latest    ${picocolors.dim(latest)}`);
+    }
+    try {
+      const du = execSync("du -sh ~/.ananse/sessions 2>/dev/null || echo ''", { encoding: "utf-8" }).trim();
+      if (du) console.log(`  └── Disk      ${picocolors.dim(du.split(/\s+/)[0])}`);
+    } catch {
+      console.log(`  └── Disk      ${picocolors.dim("?")}`);
+    }
+
+    // Project
+    console.log(picocolors.cyan("\n  ╭── Project ──"));
     const fileCount = await scanDirectory();
-    console.log(`  Files:     ${picocolors.white(String(fileCount))} in scope`);
+    console.log(`  ├── Files       ${picocolors.white(String(fileCount))} in scope`);
+    const hasPersonality = existsSync(".ananse.md");
+    console.log(`  └── Personality ${hasPersonality ? picocolors.green(".ananse.md found") : picocolors.dim("none")}`);
 
-    // Quick API connectivity check
-    if (config.apiKey && config.provider === "openai" && config.baseURL) {
-      console.log(picocolors.cyan("\n  ─── API Check ───"));
-      try {
-        const res = await fetch(`${config.baseURL}/models`, {
-          headers: { Authorization: `Bearer ${config.apiKey}` },
-        });
-        if (res.ok) {
-          const data = await res.json() as { data?: unknown[] };
-          console.log(`  Status:    ${picocolors.green("connected")}`);
-          console.log(`  Models:    ${picocolors.white(String(data.data?.length ?? "?"))} available`);
-          const remaining = res.headers.get("x-ratelimit-remaining");
-          if (remaining) console.log(`  Rate limit: ${picocolors.yellow(remaining)} requests remaining`);
-        } else {
-          console.log(`  Status:    ${picocolors.red(`HTTP ${res.status}`)}`);
+    // API Check
+    if (config.apiKey) {
+      console.log(picocolors.cyan("\n  ╭── API Check ──"));
+      const defaultEndpoints: Record<string, string> = {
+        anthropic: "https://api.anthropic.com/v1",
+        openai: "https://api.openai.com/v1",
+        google: "https://generativelanguage.googleapis.com/v1beta",
+        xai: "https://api.x.ai/v1",
+        deepseek: "https://api.deepseek.com/v1",
+        mistral: "https://api.mistral.ai/v1",
+      };
+      const base = config.baseURL || defaultEndpoints[config.provider ?? ""];
+      if (base) {
+        try {
+          const modelsUrl = base.replace(/\/+$/, "") + "/models";
+          const res = await fetch(modelsUrl, {
+            headers: { Authorization: `Bearer ${config.apiKey}` },
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (res.ok) {
+            const data = await res.json() as { data?: unknown[] };
+            console.log(`  ├── Status    ${picocolors.green("connected")}`);
+            console.log(`  ├── Endpoint  ${picocolors.dim(base)}`);
+            if (data.data) console.log(`  ├── Models    ${picocolors.white(String(data.data.length))} available`);
+            const remaining = res.headers.get("x-ratelimit-remaining")
+              ?? res.headers.get("ratelimit-remaining")
+              ?? res.headers.get("x-ratelimit-limit");
+            if (remaining) console.log(`  └── Rate limit ${picocolors.yellow(remaining)} remaining`);
+            else console.log(`  └── Rate limit ${picocolors.dim("unknown")}`);
+          } else {
+            console.log(`  ├── Status    ${picocolors.red(`HTTP ${res.status}`)}`);
+            console.log(`  └── Endpoint  ${picocolors.dim(base)}`);
+          }
+        } catch {
+          console.log(`  ├── Status    ${picocolors.red("unreachable")}`);
+          console.log(`  └── Endpoint  ${picocolors.dim(base)}`);
         }
-      } catch {
-        console.log(`  Status:    ${picocolors.red("unreachable")}`);
+      } else {
+        console.log(`  └── Status    ${picocolors.dim("unknown endpoint for this provider")}`);
       }
     }
 
@@ -372,6 +545,46 @@ program
   .action(async (command: string) => {
     const config = await readConfigFile();
     await runBuildLoop(command, config as any);
+  });
+
+program
+  .command("commit")
+  .description("Stage all files and create a git commit")
+  .argument("<message>", "Commit message")
+  .action(async (message: string) => {
+    try {
+      execSync("git add -A", { encoding: "utf-8" });
+      execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { encoding: "utf-8" });
+      console.log(picocolors.green(`\n  Committed: ${picocolors.white(message)}`));
+    } catch (e) {
+      const err = e as Error;
+      console.log(picocolors.red(`\n  ${err.message}`));
+    }
+  });
+
+program
+  .command("pr")
+  .description("Create a GitHub pull request")
+  .argument("<title>", "PR title")
+  .action(async (title: string) => {
+    try {
+      const branch = execSync("git branch --show-current", { encoding: "utf-8" }).trim();
+      execSync("git add -A", { encoding: "utf-8" });
+      try {
+        execSync(`git commit -m "${title.replace(/"/g, '\\"')}"`, { encoding: "utf-8" });
+      } catch { /* nothing to commit */ }
+      const remote = execSync("git config remote.origin.url", { encoding: "utf-8" }).trim();
+      if (!remote) { console.log(picocolors.red("\n  No remote configured.")); return; }
+      execSync(`git push -u origin ${branch}`, { encoding: "utf-8" });
+      const url = execSync(
+        `gh pr create --title "${title.replace(/"/g, '\\"')}" --body ""`,
+        { encoding: "utf-8" },
+      ).trim();
+      console.log(picocolors.green(`\n  PR created: ${picocolors.cyan(url)}`));
+    } catch (e) {
+      const err = e as Error;
+      console.log(picocolors.red(`\n  ${err.message}`));
+    }
   });
 
 program
@@ -424,6 +637,33 @@ program
   });
 
 program
+  .command("rename")
+  .description("Rename a session")
+  .argument("<name>", "Current session name")
+  .argument("<new-name>", "New session name")
+  .action(async (name: string, newName: string) => {
+    const ok = await renameSession(name, newName);
+    if (ok) {
+      console.log(picocolors.green(`\n  Renamed: ${picocolors.white(name)} → ${picocolors.white(newName)}`));
+    } else {
+      console.log(picocolors.yellow(`\n  No session found: "${name}"`));
+    }
+  });
+
+program
+  .command("rm")
+  .description("Delete a session by name or ID")
+  .argument("<name>", "Session name or ID")
+  .action(async (name: string) => {
+    const ok = await deleteSession(name);
+    if (ok) {
+      console.log(picocolors.green(`\n  Deleted session: ${picocolors.white(name)}`));
+    } else {
+      console.log(picocolors.yellow(`\n  No session found: "${name}"`));
+    }
+  });
+
+program
   .command("weave")
   .description("Generate structured output from source files")
   .addCommand(
@@ -444,5 +684,34 @@ program
         await weaveDocs(path, config as any);
       }),
   );
+
+program
+  .command("completions")
+  .description("Generate shell completion script")
+  .argument("[shell]", "Shell type (bash or zsh)", "bash")
+  .action((shell: string) => {
+    const cmds = program.commands.map((c) => c.name()).filter((n) => n !== "completions");
+    const script = shell === "zsh" ? `#compdef ananse
+_ananse() {
+  compadd ${cmds.join(" ")} ${cmds.map((c) => c).join(" ")} status configure init sessions web build spin stash pop weave
+}
+compdef _ananse ananse
+` : `_ananse_completions() {
+  local cur=\${COMP_WORDS[COMP_CWORD]}
+  local prev=\${COMP_WORDS[COMP_CWORD-1]}
+  local opts="${cmds.join(" ")}"
+  if [[ $prev == "weave" ]]; then
+    COMPREPLY=( $(compgen -W "types docs" -- $cur) )
+  elif [[ $prev == "ananse" ]]; then
+    COMPREPLY=( $(compgen -W "$opts" -- $cur) )
+  else
+    COMPREPLY=( $(compgen -W "$opts" -- $cur) )
+  fi
+  return 0
+}
+complete -F _ananse_completions ananse
+`;
+    console.log(script);
+  });
 
 await program.parseAsync(process.argv);

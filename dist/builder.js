@@ -1,6 +1,7 @@
 import { ToolLoopAgent, stepCountIs } from "ai";
 import picocolors from "picocolors";
 import { createModelFromConfig } from "./agent.js";
+import { loadPersonality } from "./personality.js";
 import { createReadTool, createWriteTool, createEditTool, createCommandTool, } from "./tools.js";
 /**
  * Run a self-correcting build loop using ToolLoopAgent.
@@ -17,6 +18,10 @@ export async function runBuildLoop(buildCommand, config) {
         console.error(picocolors.red(`Error: Unknown provider "${config.provider}".`));
         return;
     }
+    const personality = await loadPersonality();
+    const personalitySection = personality
+        ? `\nProject personality (conventions, stack, preferences):\n${personality}`
+        : "";
     const agent = new ToolLoopAgent({
         model,
         instructions: [
@@ -30,7 +35,8 @@ export async function runBuildLoop(buildCommand, config) {
             "- Repeat until the build succeeds or you hit the step limit.",
             "- When the build succeeds, announce it clearly.",
             "- Be surgical with your fixes — change only what's needed.",
-        ].join("\n"),
+            personalitySection,
+        ].filter(Boolean).join("\n"),
         tools: {
             read: createReadTool(),
             write: createWriteTool(),

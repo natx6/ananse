@@ -102,13 +102,24 @@ export function formatGraph(graph: DependencyGraph): string {
   const lines: string[] = [];
 
   for (const [file, deps] of Object.entries(graph)) {
-    lines.push(`${file}:`);
-    for (const dep of deps) {
+    lines.push(file);
+    for (let i = 0; i < deps.length; i++) {
+      const dep = deps[i];
+      const isLast = i === deps.length - 1;
+      const prefix = isLast ? "└── " : "├── ";
       const resolved = dep.resolvedPath
         ? ` → ${relative(process.cwd(), dep.resolvedPath)}`
-        : " (external)";
-      const specs = dep.specifiers.length > 0 ? ` [${dep.specifiers.join(", ")}]` : "";
-      lines.push(`  ├─ ${dep.source}${specs}${resolved}`);
+        : "";
+
+      lines.push(`${prefix}${dep.source}${resolved}`);
+
+      // Show specifiers as child branches
+      for (let j = 0; j < dep.specifiers.length; j++) {
+        const childIsLast = j === dep.specifiers.length - 1;
+        const childPrefix = isLast ? "    " : "│   ";
+        const childConn = childIsLast ? "└── " : "├── ";
+        lines.push(`${childPrefix}${childConn}${dep.specifiers[j]}`);
+      }
     }
     lines.push("");
   }

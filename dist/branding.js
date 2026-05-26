@@ -6,4 +6,5 @@ export const LOGO = [
     "  / ____ \\| |\\  |/ ____ \\| |\\  |____) | |____ ",
     " /_/    \\_\\_| \\_/_/    \\_\\_| \\_|_____/|______|",
 ].join("\n");
+export const TAGLINE = "Autonomous Neural Agent for Native Shell Execution";
 //# sourceMappingURL=branding.js.map

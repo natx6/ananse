@@ -6,5 +6,7 @@ export declare function saveSession(session: Session): Promise<void>;
 export declare function loadSession(id: string): Promise<Session | null>;
 export declare function loadSessionByName(name: string): Promise<Session | null>;
 export declare function listSessions(): Promise<Session[]>;
+export declare function renameSession(oldName: string, newName: string): Promise<boolean>;
+export declare function deleteSession(nameOrId: string): Promise<boolean>;
 export declare function listNamedSessions(): Promise<Session[]>;
 //# sourceMappingURL=session.d.ts.map

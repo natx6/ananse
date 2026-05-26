@@ -1,11 +1,17 @@
 import { confirm, isCancel } from "@clack/prompts";
 import pc from "picocolors";
+/** Set to true via --dangerously-skip-permissions to bypass all prompts */
+export let dangerousMode = false;
+export function setDangerousMode(enabled) {
+    dangerousMode = enabled;
+}
 /**
  * Request user permission for a tool action.
  *
  * Auto-approves `read` and `search` actions without prompting.
  * For `write`, `edit`, and `command` actions it shows an interactive
- * confirmation prompt via @clack/prompts.
+ * confirmation prompt via @clack/prompts — unless dangerous mode is on,
+ * in which case everything is auto-approved.
  *
  * @param type    - The kind of action being performed.
  * @param target  - The file path, command string, or search pattern.
@@ -13,6 +19,9 @@ import pc from "picocolors";
  * @returns `true` when approved, `false` when denied or cancelled.
  */
 export async function requestPermission(type, target, details) {
+    /* Dangerous mode — skip everything */
+    if (dangerousMode)
+        return true;
     /* Auto-approve read-only actions */
     if (type === "read" || type === "search") {
         return true;

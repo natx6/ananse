@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -96,6 +96,41 @@ export async function listSessions() {
     catch {
         return [];
     }
+}
+export async function renameSession(oldName, newName) {
+    const index = await readIndex();
+    const id = index[oldName];
+    if (!id)
+        return false;
+    // Update the session file's name field
+    const session = await loadSession(id);
+    if (!session)
+        return false;
+    session.name = newName;
+    await saveSession(session); // re-saves with new name, updates index
+    // Remove old name from index (saveSession added the new name)
+    delete index[oldName];
+    await writeIndex(index);
+    return true;
+}
+export async function deleteSession(nameOrId) {
+    const index = await readIndex();
+    let id = index[nameOrId];
+    if (!id)
+        id = nameOrId;
+    const path = join(SESSIONS_DIR, `${id}.json`);
+    if (!existsSync(path))
+        return false;
+    // Remove from index
+    for (const [n, sid] of Object.entries(index)) {
+        if (sid === id || n === nameOrId) {
+            delete index[n];
+            await writeIndex(index);
+            break;
+        }
+    }
+    await rm(path, { force: true });
+    return true;
 }
 export async function listNamedSessions() {
     const index = await readIndex();

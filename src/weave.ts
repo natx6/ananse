@@ -5,6 +5,7 @@ import picocolors from "picocolors";
 
 import type { AnanseConfig } from "./utils.js";
 import { createModelFromConfig } from "./agent.js";
+import { loadPersonality } from "./personality.js";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -62,10 +63,15 @@ export async function weaveTypes(
     return;
   }
 
+  const personality = await loadPersonality();
+  const personalityHint = personality
+    ? `\nProject context:\n${personality}`
+    : "";
+
   const result = await generateObject({
     model,
     schema: typesResultSchema,
-    system: "You extract type definitions from TypeScript source code. Return structured data only.",
+    system: `You extract type definitions from TypeScript source code. Return structured data only.${personalityHint}`,
     prompt: `Extract all types, interfaces, classes, and enums from this file:\n\n${content}`,
   });
 
@@ -94,10 +100,15 @@ export async function weaveDocs(
     return;
   }
 
+  const personality = await loadPersonality();
+  const personalityHint = personality
+    ? `\nProject context:\n${personality}`
+    : "";
+
   const result = await generateObject({
     model,
     schema: docsResultSchema,
-    system: "You document TypeScript source code. Return structured documentation blocks only.",
+    system: `You document TypeScript source code. Return structured documentation blocks only.${personalityHint}`,
     prompt: `Document all exports (functions, classes, types) from this file:\n\n${content}`,
   });
 

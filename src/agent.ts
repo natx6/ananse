@@ -241,8 +241,18 @@ export async function runAgentLoop(
 
     // 7c. Persist each message to the session
     for (const msg of aiMessages) {
-      if (msg.role === "assistant") {
-        const content = msg.content;
+      const m = msg as { role: string; content: unknown };
+      if (m.role === "user") {
+        const content = typeof m.content === "string"
+          ? m.content
+          : Array.isArray(m.content)
+            ? m.content.map((p: { text?: string }) => p.text ?? "").join("")
+            : "";
+        if (content) {
+          addMessage(currentSession, toInternalMessage("user", content));
+        }
+      } else if (m.role === "assistant") {
+        const content = m.content;
 
         // Flatten text content parts
         let textContent = "";
@@ -267,8 +277,9 @@ export async function runAgentLoop(
         if (textContent) {
           addMessage(currentSession, toInternalMessage("assistant", textContent));
         }
-      } else if (msg.role === "tool") {
-        for (const part of msg.content) {
+      } else if (m.role === "tool") {
+        const content = m.content as Array<{ type: string; output?: unknown; toolCallId?: string }>;
+        for (const part of content) {
           if (part.type === "tool-result") {
             addMessage(
               currentSession,
