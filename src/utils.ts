@@ -12,6 +12,8 @@ export interface AnanseConfig {
   apiKey?: string;
   provider?: string;
   model?: string;
+  baseURL?: string;
+  userName?: string;
 }
 
 export interface ProjectPersonality {

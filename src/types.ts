@@ -11,6 +11,7 @@ export interface Message {
 
 export interface Session {
   id: string;
+  name?: string;
   createdAt: string;
   updatedAt: string;
   messages: Message[];
@@ -19,7 +20,7 @@ export interface Session {
   fileCount: number;
 }
 
-export type ToolAction = "read" | "write" | "edit" | "command" | "search";
+export type ToolAction = "read" | "write" | "edit" | "command" | "search" | "crawl";
 
 export interface PermissionRequest {
   id: string;
