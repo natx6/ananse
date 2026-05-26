@@ -14,6 +14,7 @@ import { loadPersonality } from "./personality.js";
 import { dangerousMode, setDangerousMode } from "./permission.js";
 import { runAgentLoop } from "./agent.js";
 import { runBuildLoop } from "./builder.js";
+import { runRefactor } from "./refactor.js";
 import { weaveTypes, weaveDocs } from "./weave.js";
 import { crawlDirectory, formatGraph } from "./cobweb.js";
 import { listSessions, listNamedSessions, loadSessionByName, createSession, saveSession, renameSession, deleteSession, } from "./session.js";
@@ -129,6 +130,85 @@ async function main() {
         if (typeof response !== "string" || !response.trim())
             continue;
         const input = response.trim();
+        // Handle slash commands
+        if (input.startsWith("/")) {
+            const [cmd, ...args] = input.slice(1).split(/\s+/);
+            switch (cmd) {
+                case "help":
+                    console.log(picocolors.cyan("\n  Slash commands:"));
+                    console.log(`  ${picocolors.dim("/help")}       Show this help`);
+                    console.log(`  ${picocolors.dim("/model")}     Change AI model (e.g., /model gpt-4o)`);
+                    console.log(`  ${picocolors.dim("/clear")}     Clear conversation history`);
+                    console.log(`  ${picocolors.dim("/save")}     Save session with a name`);
+                    console.log(`  ${picocolors.dim("/status")}   Show session info`);
+                    console.log(`  ${picocolors.dim("/danger")}   Toggle dangerous mode`);
+                    console.log(`  ${picocolors.dim("/exit")}     Exit Ananse\n`);
+                    break;
+                case "model":
+                    if (args.length === 0) {
+                        console.log(picocolors.yellow(`\n  Current model: ${picocolors.white(config?.model ?? "default")}\n`));
+                    }
+                    else {
+                        const newModel = args.join(" ");
+                        if (flatConfig) {
+                            flatConfig.model = newModel;
+                            await writeConfigFile(flatConfig);
+                        }
+                        console.log(picocolors.green(`\n  Model switched to: ${picocolors.white(newModel)}\n`));
+                    }
+                    break;
+                case "clear": {
+                    currentSession = createSession(config ?? {}, personality, fileCount);
+                    console.log(picocolors.yellow("\n  Conversation cleared.\n"));
+                    break;
+                }
+                case "save": {
+                    const name = args.join(" ");
+                    if (name) {
+                        currentSession.name = name;
+                        await saveSession(currentSession);
+                        console.log(picocolors.green(`\n  Saved as: ${picocolors.cyan(name)}\n`));
+                    }
+                    else {
+                        const asked = await text({ message: "Session name:", placeholder: "my-session" });
+                        if (!isCancel(asked) && asked.trim()) {
+                            currentSession.name = asked.trim();
+                            await saveSession(currentSession);
+                            console.log(picocolors.green(`\n  Saved as: ${picocolors.cyan(asked.trim())}\n`));
+                        }
+                    }
+                    break;
+                }
+                case "status": {
+                    const msgs = currentSession.messages.length;
+                    const roleCounts = currentSession.messages.reduce((acc, m) => {
+                        acc[m.role] = (acc[m.role] || 0) + 1;
+                        return acc;
+                    }, {});
+                    console.log(picocolors.cyan(`\n  Session: ${currentSession.name ?? picocolors.dim("unnamed")}`));
+                    console.log(`  Model:   ${config?.model ?? picocolors.dim("default")}`);
+                    console.log(`  Provider: ${config?.provider ?? picocolors.dim("not set")}`);
+                    console.log(`  Messages: ${picocolors.white(String(msgs))} total`);
+                    for (const [role, count] of Object.entries(roleCounts)) {
+                        console.log(`    ${role}: ${count}`);
+                    }
+                    console.log(`  Danger:  ${dangerousMode ? picocolors.red("ON") : picocolors.dim("OFF")}`);
+                    console.log("");
+                    break;
+                }
+                case "danger":
+                    setDangerousMode(!dangerousMode);
+                    console.log(picocolors.red(`\n  Dangerous mode: ${dangerousMode ? "ON" : "OFF"}\n`));
+                    break;
+                case "exit":
+                case "quit":
+                    console.log(picocolors.yellow("\nGoodbye."));
+                    process.exit(0);
+                default:
+                    console.log(picocolors.yellow(`\n  Unknown command: /${cmd}. Try /help\n`));
+            }
+            continue;
+        }
         console.log(picocolors.green(`You: ${input}`));
         const updatedSession = await runAgentLoop(input, config ?? {}, personality, fileCount, userName, currentSession);
         if (updatedSession) {
@@ -617,6 +697,54 @@ program
     }
     else {
         console.log(picocolors.yellow(`\n  No session found: "${name}"`));
+    }
+});
+program
+    .command("refactor")
+    .description("Analyze blast radius and refactor with AI")
+    .argument("<file>", "Target file to refactor")
+    .argument("[description]", "What to refactor (omit for interactive prompt)")
+    .action(async (file, description) => {
+    const config = await readConfigFile();
+    await runRefactor(file, description, config);
+});
+program
+    .command("checkpoint")
+    .description("Stash uncommitted changes")
+    .argument("<name>", "Checkpoint name")
+    .action(async (name) => {
+    try {
+        const status = execSync("git status --porcelain", { encoding: "utf-8" }).trim();
+        if (!status) {
+            console.log(picocolors.yellow("\n  Nothing to stash — working tree is clean."));
+            return;
+        }
+        execSync(`git stash push -m "ananse: ${name}"`, { encoding: "utf-8" });
+        const count = status.split("\n").length;
+        console.log(picocolors.green(`\n  Stashed ${picocolors.white(String(count))} file${count === 1 ? "" : "s"} as "${picocolors.cyan(name)}"`));
+    }
+    catch (e) {
+        console.log(picocolors.red(`\n  ${e.message}`));
+    }
+});
+program
+    .command("switch")
+    .description("Stash current work and switch branches")
+    .argument("<branch>", "Branch to switch to")
+    .action(async (branch) => {
+    try {
+        // Auto-stash if dirty
+        const status = execSync("git status --porcelain", { encoding: "utf-8" }).trim();
+        if (status) {
+            const ts = Math.floor(Date.now() / 1000);
+            execSync(`git stash push -m "ananse: auto-${ts}"`, { encoding: "utf-8" });
+            console.log(picocolors.dim(`  Stashed ${status.split("\n").length} file(s) before switching`));
+        }
+        execSync(`git checkout ${branch}`, { encoding: "utf-8" });
+        console.log(picocolors.green(`\n  Switched to ${picocolors.white(branch)}`));
+    }
+    catch (e) {
+        console.log(picocolors.red(`\n  ${e.message}`));
     }
 });
 program
