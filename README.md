@@ -1,6 +1,6 @@
 # Ananse
 
-Advanced Agent for Network Security exploitation — weave implants, not context.
+Advanced Neural Agent for Network Security exploitation — weave implants, not context.
 
 Named after [Anansi](https://en.wikipedia.org/wiki/Anansi), the West African trickster spider who weaves stories.
 

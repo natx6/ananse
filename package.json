@@ -1,7 +1,7 @@
 {
   "name": "ananse",
   "version": "0.1.0",
-  "description": "Advanced Agent for Network Security exploitation",
+  "description": "Advanced Neural Agent for Network Security exploitation",
   "type": "module",
   "bin": {
     "ananse": "./dist/index.js"

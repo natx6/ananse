@@ -568,7 +568,7 @@ async function sessionsCommand(): Promise<void> {
 
 const program = new Command()
   .name("ananse")
-  .description("Advanced Agent for Network Security exploitation")
+  .description("Advanced Neural Agent for Network Security exploitation")
   .version("0.1.0")
   .option("-d, --dangerously-skip-permissions", "Skip all permission prompts (use with care)")
   .hook("preAction", (thisCmd) => {

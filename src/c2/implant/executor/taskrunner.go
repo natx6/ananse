@@ -61,6 +61,10 @@ func (r *TaskRunner) registerDefaults() {
 		"monitor_fim":         module.RunMonitorFIM,
 		"monitor_rootkit":     module.RunMonitorRootkit,
 		"monitor_all":         module.RunMonitorAll,
+		"brute_sudo":           module.RunBruteSudo,
+		"brute_ssh":            module.RunBruteSSH,
+		"brute_local":          module.RunBruteLocal,
+		"brute_all":            module.RunBruteAll,
 	}
 }
 

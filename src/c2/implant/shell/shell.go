@@ -2,7 +2,6 @@ package shell
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"fmt"
 	"math/rand"
@@ -23,32 +22,48 @@ func Run(command string, timeout time.Duration) (string, error) {
 		cmdStr = obfuscate(command)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "sh", "-c", cmdStr)
+	cmd := exec.Command("sh", "-c", cmdStr)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		out := strings.TrimSpace(stdout.String())
-		errStr := strings.TrimSpace(stderr.String())
-		if errStr != "" {
-			if out != "" {
-				return out, fmt.Errorf("%s (stderr: %s)", errStr, err)
-			}
-			return "", fmt.Errorf("%s: %w", errStr, err)
-		}
-		if out != "" {
-			return out, err
-		}
-		return "", fmt.Errorf("execution failed: %w", err)
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start failed: %w", err)
 	}
 
-	return strings.TrimSpace(stdout.String()), nil
+	// Wait for completion with timeout, then kill entire process group
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case <-time.After(timeout):
+		// Kill the entire process group (sh + all children)
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-done // reap
+		out := strings.TrimSpace(stdout.String())
+		return out, fmt.Errorf("timeout after %v", timeout)
+
+	case err := <-done:
+		if err != nil {
+			out := strings.TrimSpace(stdout.String())
+			errStr := strings.TrimSpace(stderr.String())
+			if errStr != "" {
+				if out != "" {
+					return out, fmt.Errorf("%s (stderr: %s)", errStr, err)
+				}
+				return "", fmt.Errorf("%s: %w", errStr, err)
+			}
+			if out != "" {
+				return out, err
+			}
+			return "", fmt.Errorf("execution failed: %w", err)
+		}
+		return strings.TrimSpace(stdout.String()), nil
+	}
 }
 
 // obfuscate wraps a command to evade simple pattern-matching detection.

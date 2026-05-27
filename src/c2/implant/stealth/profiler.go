@@ -166,35 +166,32 @@ func phase1(p *beacon.TargetProfile) {
 // Phase 2 — Active (check for EDR/AV monitoring tools, defenses)
 // ---------------------------------------------------------------------------
 
-// knownEDR lists common EDR, AV, and monitoring process substrings.
+// knownEDR lists common EDR and AV process substrings.
+// Only actual security products — not standard system components.
 var knownEDR = []string{
-	"crowdstrike", "falcon", "csagent", "csfalcon",
-	"sentinelone", "sentinel", "s1agent",
-	"carbonblack", "cb.exe", "cbsensor",
+	"crowdstrike", "falcon_sensor", "csagent", "csfalcon",
+	"sentinelone", "sentinelone", "s1agent",
+	"carbonblack", "cbsensor",
 	"cylance", "cyprotect",
 	"symantec", "symc", "sep",
-	"mcafee", "mfe", "mfetp",
-	"trendmicro", "tmcc", "dsagent",
+	"mcafee", "mfetp",
+	"trendmicro", "dsagent",
 	"sophos", "sophosagent",
-	"osquery", "osqueryd",
-	"auditd", "audisp",
-	"sysmon", "sysmonitor",
-	"wazuh", "ossec",
+	"osqueryd", "osqueryi",
+	"wazuh", "ossec-agent",
 	"tripwire", "aide",
 	"snort", "suricata",
 	"yara",
-	"zeek", "bro",
+	"zeek",
 	"falcon-sensor",
-	"threat",
-	"defender", "microsoftdefender",
+	"microsoftdefender", "defender",
 	"kaspersky", "kav",
-	"eset", "ekrn",
+	"ekrn",
 	"bitdefender", "bdagent",
 	"checkpoint", "cpagent",
 	"paloaltonetworks", "traps",
 	"rkhunter", "chkrootkit",
 	"lynis",
-	"selinux", "setroubleshoot",
 }
 
 // knownSandbox processes (legitimate tools that may indicate analysis env).

@@ -133,6 +133,14 @@ export function createSystemPrompt(
       exploit_service_scan: "Scan for vulnerable services",
       report: "Generate a penetration test report",
 
+      // C2 (offense)
+      c2_fleet: "List all registered C2 implants — active, dead, destroyed counts and last-seen",
+      c2_task_create: "Create a new task for a C2 implant (recon, privesc, persistence, exploit, monitor)",
+      c2_task_list: "List tasks for a C2 implant with status and timestamps",
+      c2_task_detail: "Get full details and result output for a specific C2 task",
+      c2_task_cancel: "Cancel a pending C2 task before the implant picks it up",
+      c2_kill: "Send self-destruct command to a C2 implant — removes persistence and wipes binary",
+
       // Defense
       monitor_fim_snapshot: "Snapshot critical file hashes for integrity monitoring",
       monitor_fim_check: "Compare current file hashes against a snapshot",

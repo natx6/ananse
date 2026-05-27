@@ -11,8 +11,9 @@ export class FleetRegistry {
   /** Register an implant on first beacon. */
   register(reg: ImplantRegistration): Implant {
     const now = new Date().toISOString();
+    const envInterval = process.env.C2_DEFAULT_BEACON_INTERVAL ? parseInt(process.env.C2_DEFAULT_BEACON_INTERVAL, 10) : 0;
     const config: ImplantConfig = {
-      beaconInterval: 60_000,
+      beaconInterval: envInterval > 0 ? envInterval : 60_000,
       stealthConfig: null,
     };
 

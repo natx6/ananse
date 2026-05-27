@@ -48,7 +48,7 @@ func RunReconCron(_ map[string]interface{}) (string, error) {
 
 // RunReconSuid finds SUID/SGID binaries.
 func RunReconSuid(_ map[string]interface{}) (string, error) {
-	return run("find / -type f \\( -perm -4000 -o -perm -2000 \\) 2>/dev/null")
+	return run("find /bin /sbin /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin -type f \\( -perm -4000 -o -perm -2000 \\) 2>/dev/null; find /etc -type f -perm -4000 2>/dev/null")
 }
 
 // RunReconAll runs all recon probes.

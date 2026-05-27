@@ -31,6 +31,9 @@ import { createPersistSshKeysTool, createPersistStartupTool, createPersistSshCon
 import { createExploitPackageVulnsTool, createExploitServiceScanTool } from "./offense/exploit.js";
 import { createReportTool } from "./offense/report.js";
 
+// C2 tools
+import { createC2FleetTool, createC2TaskCreateTool, createC2TaskListTool, createC2TaskDetailTool, createC2TaskCancelTool, createC2KillTool } from "./c2/tools.js";
+
 // Defense tools
 import { createMonitorFimSnapshotTool, createMonitorFimCheckTool, createMonitorRootkitTool, createMonitorProcessesTool } from "./defense/monitor.js";
 import { createComplianceSshTool, createCompliancePasswordTool, createComplianceMountTool, createComplianceAuditdTool } from "./defense/compliance.js";
@@ -81,6 +84,14 @@ const toolEntries: ToolEntry[] = [
   { name: "exploit_package_vulns", factory: createExploitPackageVulnsTool as ToolFactory },
   { name: "exploit_service_scan", factory: createExploitServiceScanTool as ToolFactory },
   { name: "report", factory: createReportTool as ToolFactory },
+
+  // C2 (offense)
+  { name: "c2_fleet", factory: createC2FleetTool as ToolFactory },
+  { name: "c2_task_create", factory: createC2TaskCreateTool as ToolFactory },
+  { name: "c2_task_list", factory: createC2TaskListTool as ToolFactory },
+  { name: "c2_task_detail", factory: createC2TaskDetailTool as ToolFactory },
+  { name: "c2_task_cancel", factory: createC2TaskCancelTool as ToolFactory },
+  { name: "c2_kill", factory: createC2KillTool as ToolFactory },
 
   // Defense
   { name: "monitor_fim_snapshot", factory: createMonitorFimSnapshotTool as ToolFactory },
