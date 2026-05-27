@@ -19,46 +19,6 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function findAffected(
-  graph: DependencyGraph,
-  targetPath: string,
-): { file: string; resolvedPath: string }[] {
-  // Forward deps: what the target imports (only resolved paths)
-  const targetEntry = Object.entries(graph).find(([k]) => k === targetPath);
-  const forward = targetEntry
-    ? targetEntry[1]
-        .filter((d) => d.resolvedPath)
-        .map((d) => ({ file: d.source, resolvedPath: d.resolvedPath! }))
-    : [];
-
-  // Reverse deps: files that import the target
-  const reverse: { file: string; resolvedPath: string }[] = [];
-  for (const [file, deps] of Object.entries(graph)) {
-    if (file === targetPath) continue;
-    for (const dep of deps) {
-      if (dep.resolvedPath === targetPath) {
-        reverse.push({ file, resolvedPath: file });
-        break;
-      }
-    }
-  }
-
-  // Transitive: files that import reverse-dependency files
-  const reversePaths = new Set(reverse.map((r) => r.resolvedPath));
-  const transitive: { file: string; resolvedPath: string }[] = [];
-  for (const [file, deps] of Object.entries(graph)) {
-    if (file === targetPath || reversePaths.has(file)) continue;
-    for (const dep of deps) {
-      if (dep.resolvedPath && reversePaths.has(dep.resolvedPath)) {
-        transitive.push({ file, resolvedPath: file });
-        break;
-      }
-    }
-  }
-
-  return [...forward, ...reverse, ...transitive];
-}
-
 function formatBlastRadius(
   targetPath: string,
   graph: DependencyGraph,

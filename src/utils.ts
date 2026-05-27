@@ -14,6 +14,8 @@ export interface AnanseConfig {
   model?: string;
   baseURL?: string;
   userName?: string;
+  mode?: string;
+  [key: string]: string | undefined;
 }
 
 export interface ProjectPersonality {

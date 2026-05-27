@@ -52,11 +52,9 @@ export function createSession(
 }
 
 export function addMessage(session: Session, message: Message): Session {
-  return {
-    ...session,
-    messages: [...session.messages, message],
-    updatedAt: new Date().toISOString(),
-  };
+  session.messages.push(message);
+  session.updatedAt = new Date().toISOString();
+  return session;
 }
 
 export async function saveSession(session: Session): Promise<void> {
@@ -129,9 +127,10 @@ export async function renameSession(oldName: string, newName: string): Promise<b
   session.name = newName;
   await saveSession(session); // re-saves with new name, updates index
 
-  // Remove old name from index (saveSession added the new name)
-  delete index[oldName];
-  await writeIndex(index);
+  // Re-read index (saveSession added the new name) and remove old name
+  const updatedIndex = await readIndex();
+  delete updatedIndex[oldName];
+  await writeIndex(updatedIndex);
   return true;
 }
 
@@ -154,6 +153,45 @@ export async function deleteSession(nameOrId: string): Promise<boolean> {
 
   await rm(path, { force: true });
   return true;
+}
+
+export async function searchSessions(query: string): Promise<{ session: Session; matches: Message[] }[]> {
+  const sessions = await listSessions();
+  const results: { session: Session; matches: Message[] }[] = [];
+  const lowerQuery = query.toLowerCase();
+
+  for (const session of sessions) {
+    const matches = session.messages.filter(
+      (m) => m.content.toLowerCase().includes(lowerQuery),
+    );
+    if (matches.length > 0) {
+      results.push({ session, matches });
+    }
+  }
+
+  return results;
+}
+
+export async function forkSession(nameOrId: string, newName: string): Promise<Session | null> {
+  const sessions = await listSessions();
+  const source = sessions.find((s) => s.name === nameOrId || s.id === nameOrId || s.id.startsWith(nameOrId));
+  if (!source) return null;
+
+  const now = new Date().toISOString();
+  const fork: Session = {
+    id: randomUUID(),
+    name: newName,
+    createdAt: now,
+    updatedAt: now,
+    messages: [...source.messages],
+    config: source.config,
+    personality: source.personality,
+    fileCount: source.fileCount,
+    tokenUsage: source.tokenUsage,
+  };
+
+  await saveSession(fork);
+  return fork;
 }
 
 export async function listNamedSessions(): Promise<Session[]> {

@@ -1,7 +1,7 @@
 {
   "name": "ananse",
   "version": "0.1.0",
-  "description": "AI agent for coding tasks",
+  "description": "Advanced Agent for Network Security exploitation",
   "type": "module",
   "bin": {
     "ananse": "./dist/index.js"
@@ -37,16 +37,26 @@
     "@ai-sdk/xai": "^3.0.92",
     "@clack/prompts": "^1.4.0",
     "ai": "^6.0.0",
+    "better-sqlite3": "^12.10.0",
     "commander": "^14.0.3",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "fast-glob": "^3.3.3",
     "js-yaml": "^4.1.1",
     "picocolors": "^1.1.1",
+    "uuid": "^14.0.0",
+    "ws": "^8.21.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.15.0",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
     "eslint": "^10.4.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.3",

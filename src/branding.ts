@@ -7,4 +7,4 @@ export const LOGO = [
   " /_/    \\_\\_| \\_/_/    \\_\\_| \\_|_____/|______|",
 ].join("\n");
 
-export const TAGLINE = "Autonomous Neural Agent for Native Shell Execution";
+export const TAGLINE = "Autonomous Neural Agent for Network Security Engineering";

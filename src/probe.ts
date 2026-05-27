@@ -10,6 +10,7 @@ import {
   createSearchTool,
   createCrawlTool,
 } from "./tools.js";
+import { setStealthConfig, stealthDelay } from "./stealth.js";
 
 /**
  * Run a security probe (vulnerability scan) using ToolLoopAgent.
@@ -18,6 +19,7 @@ import {
 export async function runProbe(
   target: string | undefined,
   config: AnanseConfig,
+  opts?: { stealth?: boolean },
   outputPath?: string,
 ): Promise<void> {
   if (!config.apiKey) {
@@ -35,6 +37,7 @@ export async function runProbe(
   const personalitySection = personality
     ? `\nProject context:\n${personality}`
     : "";
+  const stealth = opts?.stealth === true;
 
   const scopeSection = target
     ? `Scope limited to: ${target}`
@@ -60,6 +63,7 @@ export async function runProbe(
       "- Be thorough but avoid false positives.",
       "- Summarize the overall security posture at the end.",
       "",
+      stealth ? "STEALTH MODE: Operating with paced requests to avoid detection. Running quietly." : "",
       scopeSection,
       personalitySection,
     ].filter(Boolean).join("\n"),
@@ -78,7 +82,12 @@ export async function runProbe(
   });
 
   console.log(picocolors.cyan(`\n  Probing for vulnerabilities${target ? `: ${picocolors.dim(target)}` : "..."}`));
-  console.log(picocolors.dim("  (read-only audit — up to 15 steps)\n"));
+  console.log(picocolors.dim(`  (read-only audit — up to 15 steps${stealth ? ", stealth" : ""})\n`));
+
+  if (stealth) {
+    setStealthConfig({ enabled: true, minDelay: 5000, maxDelay: 15000, avoidHighRiskCommands: true });
+    await stealthDelay();
+  }
 
   try {
     const result = await agent.generate({

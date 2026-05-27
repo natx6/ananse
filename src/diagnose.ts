@@ -1,10 +1,9 @@
-import { execSync } from "node:child_process";
-
 // ---------------------------------------------------------------------------
 // Terminal noise stripping
 // ---------------------------------------------------------------------------
 
-const ANSI_RE = /[][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d\/#&.:=?%@~_])*[a-zA-Z\d]+)|(?:;?\d+(?:\.\d+)?)*(?:[mMnPsu]|(?:[a-zA-Z]|\d+(?:[a-zA-Z]?\d*)?)))|\d+(?:\.\d+)?|[su])/g;
+const ESC = String.fromCharCode(27);
+const ANSI_RE = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
 
 const CARRIAGE_RETURN_RE = /\r[^\n]*/g;
 

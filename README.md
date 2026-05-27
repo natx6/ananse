@@ -1,6 +1,6 @@
 # Ananse
 
-AI coding agent for your terminal — weave code, not context.
+Advanced Agent for Network Security exploitation — weave implants, not context.
 
 Named after [Anansi](https://en.wikipedia.org/wiki/Anansi), the West African trickster spider who weaves stories.
 

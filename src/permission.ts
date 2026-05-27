@@ -1,6 +1,7 @@
 import { confirm, isCancel } from "@clack/prompts";
 import pc from "picocolors";
 import type { ToolAction } from "./types.js";
+import { checkPolicy } from "./policy.js";
 
 /** Set to true via --dangerously-skip-permissions to bypass all prompts */
 export let dangerousMode = false;
@@ -12,10 +13,15 @@ export function setDangerousMode(enabled: boolean): void {
 /**
  * Request user permission for a tool action.
  *
- * Auto-approves `read` and `search` actions without prompting.
+ * First checks the policy engine (`.ananse.policy.yml`):
+ * - `deny` → immediately reject
+ * - `allow` → auto-approve without prompting
+ * - `require_approval` → show interactive prompt
+ *
+ * Auto-approves `read` and `search` actions when no policy is set.
  * For `write`, `edit`, and `command` actions it shows an interactive
- * confirmation prompt via @clack/prompts — unless dangerous mode is on,
- * in which case everything is auto-approved.
+ * confirmation prompt via @clack/prompts — unless dangerous mode is on
+ * (bypasses everything), or policy says "allow".
  *
  * @param type    - The kind of action being performed.
  * @param target  - The file path, command string, or search pattern.
@@ -29,6 +35,16 @@ export async function requestPermission(
 ): Promise<boolean> {
   /* Dangerous mode — skip everything */
   if (dangerousMode) return true;
+
+  /* Policy check — deny takes precedence */
+  const verdict = checkPolicy(type, target);
+  if (verdict === "deny") {
+    console.error(pc.red(`\n  Policy denied: ${type} on "${target}"`));
+    return false;
+  }
+  if (verdict === "allow") return true;
+
+  /* verdict === "require_approval" (or no policy) — use existing logic */
 
   /* Auto-approve read-only actions */
   if (type === "read" || type === "search") {

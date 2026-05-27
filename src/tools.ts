@@ -101,7 +101,9 @@ export function createEditTool() {
   });
 }
 
-export function createCommandTool() {
+export function createCommandTool(
+  execOverride?: (command: string, timeout?: number) => Promise<{ stdout: string; stderr: string }>,
+) {
   return tool({
     description: "Run a shell command and return its output. Max timeout 300s.",
     inputSchema: z.object({
@@ -113,6 +115,18 @@ export function createCommandTool() {
       if (!permitted) {
         return { success: false, data: "", error: "Operation cancelled by user" };
       }
+
+      // Route through exec override if provided (e.g., SSH)
+      if (execOverride) {
+        try {
+          const result = await execOverride(command, timeout ?? MAX_TIMEOUT_MS);
+          const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+          return { success: true, data: output || "(no output)" };
+        } catch (err) {
+          return { success: false, data: "", error: (err as Error).message };
+        }
+      }
+
       try {
         const safeTimeout = timeout ?? MAX_TIMEOUT_MS;
         const { stdout, stderr } = await execFileAsync(command, [], {
@@ -246,3 +260,19 @@ function isNodeError(err: unknown): err is NodeError {
 function toErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
+
+// ---------------------------------------------------------------------------
+// Tool registration with mode system
+// ---------------------------------------------------------------------------
+
+import { registerTool } from "./mode.js";
+
+registerTool("read", "core");
+registerTool("write", "core");
+registerTool("edit", "core");
+registerTool("command", "core");
+registerTool("search", "core");
+registerTool("crawl", "core");
+registerTool("patch", "core");
+registerTool("blast", "core");
+registerTool("subagent", "core");

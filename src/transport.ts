@@ -61,6 +61,7 @@ export class SshSession {
   private controlPath: string;
   private connected: boolean = false;
   private stealthConfig: StealthConfig | null;
+  private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(target: SshTarget, stealthConfig?: StealthConfig | null) {
     this.target = target;
@@ -74,6 +75,69 @@ export class SshSession {
    */
   updateStealthConfig(config: StealthConfig): void {
     this.stealthConfig = config;
+  }
+
+  /**
+   * Start periodic keepalive pings to prevent SSH connection dropout.
+   * Runs `ssh -O check` on an interval to keep the ControlMaster socket alive.
+   */
+  keepalive(intervalMs: number = 60_000): void {
+    this.stopKeepalive();
+    this.keepaliveTimer = setInterval(async () => {
+      try {
+        await execFileAsync("ssh", [
+          "-o", `ControlPath=${this.controlPath}`,
+          "-O", "check",
+          targetHost(this.target),
+        ], { timeout: 10_000 });
+      } catch {
+        // Socket may be dead — caller will detect via exec() failures
+      }
+    }, intervalMs);
+  }
+
+  private stopKeepalive(): void {
+    if (this.keepaliveTimer !== null) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
+  }
+
+  /**
+   * Check whether the SSH control socket is still alive.
+   */
+  async isConnected(): Promise<boolean> {
+    if (!this.connected) return false;
+    try {
+      await execFileAsync("ssh", [
+        "-o", `ControlPath=${this.controlPath}`,
+        "-O", "check",
+        targetHost(this.target),
+      ], { timeout: 5_000 });
+      return true;
+    } catch {
+      this.connected = false;
+      return false;
+    }
+  }
+
+  /**
+   * Reconnect with exponential backoff (2s, 4s, 8s).
+   * Returns true if reconnected successfully.
+   */
+  async reconnect(retries: number = 3): Promise<boolean> {
+    for (let i = 0; i < retries; i++) {
+      const delay = Math.min(2000 * Math.pow(2, i), 10_000);
+      await new Promise((r) => setTimeout(r, delay));
+      try {
+        await this.close();
+        await this.connect();
+        return true;
+      } catch {
+        // Try next backoff
+      }
+    }
+    return false;
   }
 
   /**
@@ -138,6 +202,7 @@ export class SshSession {
    * Close the SSH connection and clean up the control socket.
    */
   async close(): Promise<void> {
+    this.stopKeepalive();
     if (!this.connected) return;
     try {
       await execFileAsync("ssh", [

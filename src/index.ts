@@ -8,12 +8,17 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import * as readline from "node:readline/promises";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { stdin as processStdin, stdout as processStdout } from "node:process";
 import { LOGO, TAGLINE } from "./branding.js";
 import { checkConfig, scanDirectory } from "./utils.js";
 import { loadPersonality } from "./personality.js";
 import { dangerousMode, setDangerousMode } from "./permission.js";
+import { getModeFromConfig, getToolNamesForMode, printModeInfo } from "./mode.js";
+import type { AnanseMode } from "./mode.js";
+import { loadPolicy } from "./policy.js";
+import { listPlugins } from "./plugin.js";
+import { initKnowledge } from "./knowledge.js";
 import { runAgentLoop } from "./agent.js";
 import { runBuildLoop } from "./builder.js";
 import { runRefactor } from "./refactor.js";
@@ -21,15 +26,39 @@ import { weaveTypes, weaveDocs } from "./weave.js";
 import { crawlDirectory, formatGraph } from "./cobweb.js";
 import { sortDirectory } from "./sorter.js";
 import { generatePatches, applyPatches } from "./patch.js";
+import { runReview } from "./review.js";
+import { runTestGen } from "./testgen.js";
+import { runExplain } from "./explain.js";
+import { runDoctor } from "./doctor.js";
+import { configGet, configSet } from "./configcmd.js";
+import { runFixLoop } from "./fix.js";
+import { runProbe } from "./probe.js";
+import { runAttack } from "./attack.js";
+import { runDefend } from "./defend.js";
+import { runGuard } from "./guard/loop.js";
+import { startServer } from "./c2/server/index.js";
+import { createC2Command } from "./c2/client/index.js";
 import {
   listSessions,
   listNamedSessions,
+  searchSessions,
   loadSessionByName,
+  loadSession,
+  forkSession,
   createSession,
   saveSession,
   renameSession,
   deleteSession,
 } from "./session.js";
+
+// Global error handlers
+process.on("unhandledRejection", (reason) => {
+  console.error(picocolors.red("\n  Unhandled rejection:"), reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error(picocolors.red("\n  Uncaught exception:"), error.message);
+  process.exit(1);
+});
 
 const CONFIG_DIR = `${homedir()}/.ananse`;
 const CONFIG_PATH = `${CONFIG_DIR}/config.json`;
@@ -94,6 +123,14 @@ async function barePrompt(): Promise<string | symbol> {
   }
 }
 
+function formatMode(mode: string): string {
+  switch (mode) {
+    case "offense": return picocolors.red(mode);
+    case "defense": return picocolors.green(mode);
+    default: return picocolors.dim(mode);
+  }
+}
+
 async function main(): Promise<void> {
   console.clear();
   console.log(picocolors.white(LOGO));
@@ -107,6 +144,12 @@ async function main(): Promise<void> {
 
   s.message("Weaving local context... reading project personality");
   const personality = await loadPersonality();
+
+  s.message("Weaving local context... loading security policy");
+  await loadPolicy();
+
+  s.message("Weaving local context... initializing knowledge base");
+  await initKnowledge();
 
   s.message("Weaving local context... scanning project files");
   const fileCount = await scanDirectory();
@@ -123,22 +166,53 @@ async function main(): Promise<void> {
 
   console.log("");
 
-  const summaryParts: string[] = [];
-  summaryParts.push(
-    `provider: ${config?.provider ?? picocolors.dim("not set")}`,
-  );
-  summaryParts.push(`${fileCount} file${fileCount === 1 ? "" : "s"} in scope`);
-  console.log(picocolors.dim(`  ${summaryParts.join(" | ")}`));
-  console.log("");
-
   // resolve user name (git → ask → persist)
   const flatConfig = await readConfigFile();
   const userName = await resolveUserName(flatConfig);
 
+  const summaryParts: string[] = [];
+  const currentMode = getModeFromConfig(flatConfig);
+  summaryParts.push(
+    `mode: ${formatMode(currentMode)}`,
+    `provider: ${config?.provider ?? picocolors.dim("not set")}`,
+  );
+  summaryParts.push(`${fileCount} file${fileCount === 1 ? "" : "s"} in scope`);
+  if (currentMode !== "normal") {
+    const tools = getToolNamesForMode(currentMode).join(", ");
+    summaryParts.push(picocolors.dim(`tools: ${tools}`));
+  }
+  console.log(picocolors.dim(`  ${summaryParts.join(" | ")}`));
+  console.log("");
+
   let firstTurn = true;
   let currentSession = createSession(config ?? {}, personality, fileCount);
 
-  // eslint-disable-next-line no-constant-condition
+  // Offer to resume a recent session
+  const recentSessions = await listSessions();
+  const resumable = recentSessions.filter((s) => s.messages.length > 0);
+  if (resumable.length > 0) {
+    const choice = await select({
+      message: "Resume a recent session?",
+      options: [
+        { value: "__new__", label: "Start fresh" },
+        ...resumable.slice(0, 5).map((s) => ({
+          value: s.id,
+          label: `${s.name ?? s.messages[0]?.content.slice(0, 40) ?? "unnamed"}  ${picocolors.dim(`${s.messages.length} msgs`)}`,
+        })),
+      ],
+    });
+    if (!isCancel(choice) && choice !== "__new__") {
+      const loaded = await loadSession(choice as string);
+      if (loaded) {
+        currentSession = loaded;
+        const lines = loaded.name
+          ? `Resumed session: ${picocolors.cyan(loaded.name)}`
+          : `Resumed session (${loaded.messages.length} messages)`;
+        console.log(picocolors.green(`  ${lines}\n`));
+      }
+    }
+  }
+
   while (true) {
     let response: string | symbol;
 
@@ -168,12 +242,15 @@ async function main(): Promise<void> {
         case "help":
           console.log(picocolors.cyan("\n  Slash commands:"));
           console.log(`  ${picocolors.dim("/help")}       Show this help`);
+          console.log(`  ${picocolors.dim("/mode")}     Show or change mode (/mode offense|defense|normal)`);
           console.log(`  ${picocolors.dim("/model")}     Change AI model (e.g., /model gpt-4o)`);
           console.log(`  ${picocolors.dim("/clear")}     Clear conversation history`);
           console.log(`  ${picocolors.dim("/save")}     Save session with a name`);
-          console.log(`  ${picocolors.dim("/status")}   Show session info`);
+          console.log(`  ${picocolors.dim("/status")}   Show session info (msgs, tokens)`);
           console.log(`  ${picocolors.dim("/danger")}   Toggle dangerous mode`);
-          console.log(`  ${picocolors.dim("/exit")}     Exit Ananse\n`);
+          console.log(`  ${picocolors.dim("/exit")}     Exit Ananse`);
+          console.log(picocolors.dim("\n  Tip: search sessions with `ananse search <query>`"));
+          console.log(picocolors.dim("  Tip: review changes with `ananse review`\n"));
           break;
         case "model":
           if (args.length === 0) {
@@ -187,6 +264,21 @@ async function main(): Promise<void> {
             console.log(picocolors.green(`\n  Model switched to: ${picocolors.white(newModel)}\n`));
           }
           break;
+        case "mode": {
+          const newMode = args[0]?.toLowerCase();
+          if (!newMode) {
+            const m = getModeFromConfig(flatConfig);
+            console.log(picocolors.cyan(`\n  Current mode: ${formatMode(m)}\n`));
+          } else if (["normal", "offense", "defense"].includes(newMode)) {
+            flatConfig.mode = newMode;
+            await writeConfigFile(flatConfig);
+            console.log(picocolors.green(`  Mode switched to: ${picocolors.white(newMode)}\n`));
+            printModeInfo(newMode as "normal" | "offense" | "defense");
+          } else {
+            console.log(picocolors.yellow(`\n  Unknown mode: ${newMode}. Use normal, offense, or defense.\n`));
+          }
+          break;
+        }
         case "clear": {
           currentSession = createSession(config ?? {}, personality, fileCount);
           console.log(picocolors.yellow("\n  Conversation cleared.\n"));
@@ -214,12 +306,18 @@ async function main(): Promise<void> {
             acc[m.role] = (acc[m.role] || 0) + 1;
             return acc;
           }, {} as Record<string, number>);
+          const modeLabel = getModeFromConfig(flatConfig);
           console.log(picocolors.cyan(`\n  Session: ${currentSession.name ?? picocolors.dim("unnamed")}`));
+          console.log(`  Mode:    ${formatMode(modeLabel)}`);
           console.log(`  Model:   ${config?.model ?? picocolors.dim("default")}`);
           console.log(`  Provider: ${config?.provider ?? picocolors.dim("not set")}`);
           console.log(`  Messages: ${picocolors.white(String(msgs))} total`);
           for (const [role, count] of Object.entries(roleCounts)) {
             console.log(`    ${role}: ${count}`);
+          }
+          if (currentSession.tokenUsage) {
+            const tu = currentSession.tokenUsage;
+            console.log(`  Tokens:  ${picocolors.white(String(tu.totalTokens))} total (${picocolors.dim(`${tu.promptTokens} in / ${tu.completionTokens} out`)} )`);
           }
           console.log(`  Danger:  ${dangerousMode ? picocolors.red("ON") : picocolors.dim("OFF")}`);
           console.log("");
@@ -233,6 +331,7 @@ async function main(): Promise<void> {
         case "quit":
           console.log(picocolors.yellow("\nGoodbye."));
           process.exit(0);
+          break;
         default:
           console.log(picocolors.yellow(`\n  Unknown command: /${cmd}. Try /help\n`));
       }
@@ -429,7 +528,6 @@ async function sessionsCommand(): Promise<void> {
     for (const s of named) {
       const date = new Date(s.updatedAt).toLocaleString();
       const msgs = s.messages.length;
-      const lastPreview = [...s.messages].reverse().find((m) => m.role === "user")?.content.slice(0, 55) ?? "";
       options.push({
         value: s.id,
         label: `${picocolors.cyan(s.name!)}  ${picocolors.dim(`${msgs} msgs`)}  ${picocolors.dim(date)}`,
@@ -470,7 +568,7 @@ async function sessionsCommand(): Promise<void> {
 
 const program = new Command()
   .name("ananse")
-  .description("AI agent for coding tasks")
+  .description("Advanced Agent for Network Security exploitation")
   .version("0.1.0")
   .option("-d, --dangerously-skip-permissions", "Skip all permission prompts (use with care)")
   .hook("preAction", (thisCmd) => {
@@ -631,13 +729,22 @@ program
   });
 
 program
+  .command("heal")
+  .description("Run a command with automatic error fixing")
+  .argument("<command>", "Command to execute and fix")
+  .action(async (command: string) => {
+    const config = await readConfigFile();
+    await runFixLoop(command, config as any);
+  });
+
+program
   .command("commit")
   .description("Stage all files and create a git commit")
   .argument("<message>", "Commit message")
   .action(async (message: string) => {
     try {
       execSync("git add -A", { encoding: "utf-8" });
-      execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { encoding: "utf-8" });
+      execFileSync("git", ["commit", "-m", message], { encoding: "utf-8" });
       console.log(picocolors.green(`\n  Committed: ${picocolors.white(message)}`));
     } catch (e) {
       const err = e as Error;
@@ -654,15 +761,12 @@ program
       const branch = execSync("git branch --show-current", { encoding: "utf-8" }).trim();
       execSync("git add -A", { encoding: "utf-8" });
       try {
-        execSync(`git commit -m "${title.replace(/"/g, '\\"')}"`, { encoding: "utf-8" });
+        execFileSync("git", ["commit", "-m", title], { encoding: "utf-8" });
       } catch { /* nothing to commit */ }
       const remote = execSync("git config remote.origin.url", { encoding: "utf-8" }).trim();
       if (!remote) { console.log(picocolors.red("\n  No remote configured.")); return; }
-      execSync(`git push -u origin ${branch}`, { encoding: "utf-8" });
-      const url = execSync(
-        `gh pr create --title "${title.replace(/"/g, '\\"')}" --body ""`,
-        { encoding: "utf-8" },
-      ).trim();
+      execFileSync("git", ["push", "-u", "origin", branch], { encoding: "utf-8" });
+      const url = execFileSync("gh", ["pr", "create", "--title", title, "--body", ""], { encoding: "utf-8" }).trim();
       console.log(picocolors.green(`\n  PR created: ${picocolors.cyan(url)}`));
     } catch (e) {
       const err = e as Error;
@@ -685,7 +789,6 @@ program
   .command("stash")
   .description("Save the current conversation session")
   .action(async () => {
-    const config = await readConfigFile();
     const sessions = await listNamedSessions();
     if (sessions.length === 0) {
       console.log(picocolors.yellow("No sessions to stash."));
@@ -757,9 +860,9 @@ program
   });
 
 program
-  .command("checkpoint")
+  .command("freeze")
   .description("Stash uncommitted changes")
-  .argument("<name>", "Checkpoint name")
+  .argument("<name>", "Freeze name")
   .action(async (name: string) => {
     try {
       const status = execSync("git status --porcelain", { encoding: "utf-8" }).trim();
@@ -767,7 +870,7 @@ program
         console.log(picocolors.yellow("\n  Nothing to stash — working tree is clean."));
         return;
       }
-      execSync(`git stash push -m "ananse: ${name}"`, { encoding: "utf-8" });
+      execFileSync("git", ["stash", "push", "-m", `ananse: ${name}`], { encoding: "utf-8" });
       const count = status.split("\n").length;
       console.log(picocolors.green(`\n  Stashed ${picocolors.white(String(count))} file${count === 1 ? "" : "s"} as "${picocolors.cyan(name)}"`));
     } catch (e) {
@@ -785,10 +888,10 @@ program
       const status = execSync("git status --porcelain", { encoding: "utf-8" }).trim();
       if (status) {
         const ts = Math.floor(Date.now() / 1000);
-        execSync(`git stash push -m "ananse: auto-${ts}"`, { encoding: "utf-8" });
+        execFileSync("git", ["stash", "push", "-m", `ananse: auto-${ts}`], { encoding: "utf-8" });
         console.log(picocolors.dim(`  Stashed ${status.split("\n").length} file(s) before switching`));
       }
-      execSync(`git checkout ${branch}`, { encoding: "utf-8" });
+      execFileSync("git", ["checkout", branch], { encoding: "utf-8" });
       console.log(picocolors.green(`\n  Switched to ${picocolors.white(branch)}`));
     } catch (e) {
       console.log(picocolors.red(`\n  ${(e as Error).message}`));
@@ -848,32 +951,316 @@ program
   );
 
 program
+  .command("review")
+  .description("AI code review for staged and unstaged changes")
+  .action(async () => {
+    const config = await readConfigFile();
+    await runReview(config as any);
+  });
+
+program
+  .command("testgen")
+  .description("Generate unit tests for a file using AI")
+  .argument("<file>", "File to generate tests for")
+  .action(async (file: string) => {
+    const config = await readConfigFile();
+    await runTestGen(file, config as any);
+  });
+
+program
+  .command("explain")
+  .description("Explain code using AI")
+  .argument("<file>", "File to explain")
+  .argument("[target]", "Specific function or class to explain")
+  .action(async (file: string, target?: string) => {
+    const config = await readConfigFile();
+    await runExplain(file, config as any, target);
+  });
+
+program
+  .command("search")
+  .description("Search session messages")
+  .argument("<query>", "Search term")
+  .action(async (query: string) => {
+    const results = await searchSessions(query);
+    if (results.length === 0) {
+      console.log(picocolors.yellow(`\n  No sessions match "${query}"\n`));
+      return;
+    }
+    console.log(picocolors.cyan(`\n  Found ${results.length} session(s) matching "${query}":\n`));
+    for (const { session, matches } of results) {
+      console.log(`  ${picocolors.white(session.name ?? "unnamed")}  ${picocolors.dim(`(${matches.length} match(es))`)}`);
+      for (const match of matches.slice(0, 3)) {
+        const preview = match.content.slice(0, 120).replace(/\n/g, " ");
+        console.log(`    ${picocolors.dim("└")} ${picocolors.dim(preview)}`);
+      }
+      if (matches.length > 3) {
+        console.log(`    ${picocolors.dim("└ and")} ${matches.length - 3} ${picocolors.dim("more matches")}`);
+      }
+      console.log("");
+    }
+  });
+
+program
+  .command("doctor")
+  .description("Check system health (config, git, sessions)")
+  .action(async () => {
+    await runDoctor();
+  });
+
+program
+  .command("mode")
+  .description("Show current mode")
+  .argument("[mode]", "Switch mode: normal, offense, or defense")
+  .action(async (mode?: string) => {
+    const config = await readConfigFile();
+    if (!mode) {
+      const m = getModeFromConfig(config);
+      console.log(picocolors.cyan(`\n  Current mode: ${formatMode(m)}\n`));
+      return;
+    }
+    const lower = mode.toLowerCase();
+    if (!["normal", "offense", "defense"].includes(lower)) {
+      console.log(picocolors.yellow(`\n  Unknown mode: ${lower}. Use normal, offense, or defense.\n`));
+      return;
+    }
+    config.mode = lower;
+    await writeConfigFile(config);
+    console.log(picocolors.green(`\n  Mode set to: ${picocolors.white(lower)}\n`));
+    printModeInfo(lower as "normal" | "offense" | "defense");
+  });
+
+program
+  .command("plugin")
+  .description("Manage plugins")
+  .addCommand(
+    new Command("list")
+      .description("List installed plugins")
+      .action(async () => {
+        const plugins = await listPlugins();
+        if (plugins.length === 0) {
+          console.log(picocolors.yellow("\n  No plugins installed.\n"));
+          return;
+        }
+        console.log(picocolors.cyan("\n  Installed plugins:\n"));
+        for (const p of plugins) {
+          const tools = p.tools.map((t) => `${t.name}(${t.mode})`).join(", ");
+          console.log(`  ${picocolors.white(p.name)} ${picocolors.dim(`v${p.version}`)}`);
+          console.log(`  ${picocolors.dim(p.description)}`);
+          console.log(`  ${picocolors.dim(`  Tools: ${tools}`)}\n`);
+        }
+      }),
+  );
+
+program
+  .command("probe")
+  .description("Scan project for security vulnerabilities")
+  .argument("[target]", "Specific file or directory to scan")
+  .option("-o, --output <file>", "Write report to file")
+  .option("-s, --stealth", "Enable stealth mode (traffic shaping, quiet commands)")
+  .action(async (target: string | undefined, opts: { output?: string; stealth?: boolean }) => {
+    const config = await readConfigFile();
+    await runProbe(target, config as any, { stealth: opts.stealth }, opts.output);
+  });
+
+program
+  .command("attack")
+  .description("Run offense mode against a target (SSH or local path)")
+  .argument("<target>", "Target (user@host or ./path)")
+  .option("--recon", "Recon only")
+  .option("--all", "Full pentest suite")
+  .option("-o, --output <file>", "Write report to file")
+  .option("-s, --stealth", "Enable stealth mode (traffic shaping, quiet commands)")
+  .action(async (target: string, opts: { recon?: boolean; all?: boolean; output?: string; stealth?: boolean }) => {
+    const config = await readConfigFile();
+    config.mode = "offense";
+    await writeConfigFile(config);
+    await runAttack(target, config as any, opts, opts.output);
+  });
+
+program
+  .command("defend")
+  .description("Run defense mode against a target (SSH or local path)")
+  .argument("<target>", "Target (user@host or ./path)")
+  .option("--harden", "Full hardening assessment")
+  .option("--monitor", "Monitoring only (rootkit, FIM, processes)")
+  .option("-o, --output <file>", "Write report to file")
+  .option("-s, --stealth", "Enable stealth mode (traffic shaping, quiet commands)")
+  .action(async (target: string, opts: { harden?: boolean; monitor?: boolean; output?: string; stealth?: boolean }) => {
+    const config = await readConfigFile();
+    config.mode = "defense";
+    await writeConfigFile(config);
+    await runDefend(target, config as any, opts, opts.output);
+  });
+
+program
+  .command("guard")
+  .description("Persistent monitoring — watch a remote target for drift")
+  .argument("<target>", "SSH target (user@host[:port])")
+  .option("-i, --interval <seconds>", "Check interval in seconds", "300")
+  .option("-o, --output <dir>", "Output directory for baseline and alerts")
+  .option("--notify", "Write alerts to log file")
+  .action(async (target: string, opts: { interval?: string; output?: string; notify?: boolean }) => {
+    const config = await readConfigFile();
+    await runGuard(target, config as any, {
+      interval: opts.interval ? parseInt(opts.interval, 10) : 300,
+      output: opts.output,
+      notify: opts.notify,
+    });
+  });
+
+program
+  .command("c2-server")
+  .description("Start the C2 command & control server")
+  .option("-p, --port <number>", "Port to listen on", "8443")
+  .option("--host <address>", "Host to bind to", "0.0.0.0")
+  .option("--db <path>", "SQLite database path")
+  .action((opts: { port?: string; host?: string; db?: string }) => {
+    const server = startServer({
+      port: opts.port ? parseInt(opts.port, 10) : 8443,
+      host: opts.host,
+      dbPath: opts.db,
+    });
+
+    // Handle shutdown
+    process.on("SIGINT", () => {
+      console.log("\n  Shutting down C2 server...");
+      server.close();
+      process.exit(0);
+    });
+    process.on("SIGTERM", () => {
+      server.close();
+      process.exit(0);
+    });
+  });
+
+program.addCommand(createC2Command());
+
+program
+  .command("fork")
+  .description("Fork an existing session under a new name")
+  .argument("<session>", "Session name or ID to fork")
+  .argument("<new-name>", "Name for the new session")
+  .action(async (session: string, newName: string) => {
+    const fork = await forkSession(session, newName);
+    if (fork) {
+      console.log(picocolors.green(`\n  Forked: ${picocolors.white(session)} → ${picocolors.white(newName)} (${fork.id})\n`));
+    } else {
+      console.log(picocolors.yellow(`\n  Session not found: "${session}"\n`));
+    }
+  });
+
+program
+  .command("config")
+  .description("View or set configuration")
+  .addCommand(
+    new Command("get")
+      .description("Show config values")
+      .argument("[key]", "Config key (apiKey, provider, model, baseURL, userName)")
+      .action(async (key?: string) => configGet(key)),
+  )
+  .addCommand(
+    new Command("set")
+      .description("Set a config value")
+      .argument("<key>", "Config key")
+      .argument("<value>", "Config value")
+      .action(async (key: string, value: string) => configSet(key, value)),
+  );
+
+program
   .command("completions")
   .description("Generate shell completion script")
   .argument("[shell]", "Shell type (bash or zsh)", "bash")
-  .action((shell: string) => {
+  .option("--install", "Install completions to shell config")
+  .action(async (shell: string, opts: { install?: boolean }) => {
     const cmds = program.commands.map((c) => c.name()).filter((n) => n !== "completions");
     const script = shell === "zsh" ? `#compdef ananse
 _ananse() {
-  compadd ${cmds.join(" ")} ${cmds.map((c) => c).join(" ")} status configure init sessions web build spin stash pop weave
+  compadd ${cmds.join(" ")}
 }
 compdef _ananse ananse
 ` : `_ananse_completions() {
   local cur=\${COMP_WORDS[COMP_CWORD]}
-  local prev=\${COMP_WORDS[COMP_CWORD-1]}
   local opts="${cmds.join(" ")}"
-  if [[ $prev == "weave" ]]; then
-    COMPREPLY=( $(compgen -W "types docs" -- $cur) )
-  elif [[ $prev == "ananse" ]]; then
-    COMPREPLY=( $(compgen -W "$opts" -- $cur) )
-  else
-    COMPREPLY=( $(compgen -W "$opts" -- $cur) )
-  fi
+  COMPREPLY=( $(compgen -W "$opts" -- $cur) )
   return 0
 }
 complete -F _ananse_completions ananse
 `;
-    console.log(script);
+    if (opts.install) {
+      const rcFile = shell === "zsh"
+        ? join(homedir(), ".zshrc")
+        : join(homedir(), ".bashrc");
+      try {
+        const existing = await readFile(rcFile, "utf-8").catch(() => "");
+        if (existing.includes("_ananse_completions") || existing.includes("_ananse")) {
+          console.log(picocolors.yellow(`\n  Completions already installed in ${rcFile}\n`));
+          return;
+        }
+        await writeFile(rcFile, `${existing}\n# ananse completions\n${script}\n`, "utf-8");
+        console.log(picocolors.green(`\n  Completions installed for ${shell}. Restart your shell or run:\n    source ${rcFile}\n`));
+      } catch {
+        console.error(picocolors.red(`\n  Failed to write to ${rcFile}\n`));
+      }
+    } else {
+      console.log(script);
+    }
   });
+
+program
+  .command("diff")
+  .description("Compare two sessions")
+  .argument("<session1>", "First session name or ID")
+  .argument("<session2>", "Second session name or ID")
+  .action(async (s1: string, s2: string) => {
+    const sessions = await listSessions();
+    const find = (nameOrId: string) =>
+      sessions.find((s) => s.name === nameOrId || s.id === nameOrId || s.id.startsWith(nameOrId));
+    const a = find(s1);
+    const b = find(s2);
+    if (!a || !b) {
+      console.log(picocolors.yellow(`\n  Session not found: "${!a ? s1 : s2}"\n`));
+      return;
+    }
+    console.log(picocolors.cyan(`\n  Comparing: ${picocolors.white(a.name ?? a.id)} vs ${picocolors.white(b.name ?? b.id)}\n`));
+    console.log(`  ${picocolors.dim("─── Session 1 ───")}`);
+    console.log(`  Name:     ${a.name ?? picocolors.dim("unnamed")}`);
+    console.log(`  Created:  ${new Date(a.createdAt).toLocaleString()}`);
+    console.log(`  Updated:  ${new Date(a.updatedAt).toLocaleString()}`);
+    console.log(`  Messages: ${a.messages.length}`);
+    if (a.tokenUsage) console.log(`  Tokens:   ${a.tokenUsage.totalTokens}`);
+    console.log(`  ${picocolors.dim("─── Session 2 ───")}`);
+    console.log(`  Name:     ${b.name ?? picocolors.dim("unnamed")}`);
+    console.log(`  Created:  ${new Date(b.createdAt).toLocaleString()}`);
+    console.log(`  Updated:  ${new Date(b.updatedAt).toLocaleString()}`);
+    console.log(`  Messages: ${b.messages.length}`);
+    if (b.tokenUsage) console.log(`  Tokens:   ${b.tokenUsage.totalTokens}`);
+
+    const diff = a.messages.length - b.messages.length;
+    const shared = Math.min(
+      a.messages.filter((m) => b.messages.some((n) => n.content === m.content)).length,
+      b.messages.filter((n) => a.messages.some((m) => m.content === n.content)).length,
+    );
+    console.log(`  ${picocolors.dim("─── Comparison ───")}`);
+    console.log(`  Shared:   ${shared} message${shared === 1 ? "" : "s"}`);
+    console.log(`  Diff:     ${diff > 0 ? `${picocolors.green(`+${diff}`)} (s1 has more)` : diff < 0 ? `${picocolors.red(`${diff}`)} (s2 has more)` : picocolors.dim("identical")}`);
+    if (a.tokenUsage && b.tokenUsage) {
+      const tDiff = a.tokenUsage.totalTokens - b.tokenUsage.totalTokens;
+      console.log(`  Tokens:   ${tDiff > 0 ? picocolors.green(`+${tDiff}`) : tDiff < 0 ? picocolors.red(`${tDiff}`) : picocolors.dim("identical")}`);
+    }
+    console.log("");
+  });
+
+program.addHelpText("after", `
+${picocolors.cyan("  Categories:")}
+${picocolors.dim("    Core:")}     configure, init, status, doctor, config, mode
+${picocolors.dim("    Sessions:")} sessions, spin, pop, stash, rename, rm, fork, diff, search
+${picocolors.dim("    AI:")}       build, refactor, review, testgen, explain, patch, weave, heal
+${picocolors.dim("    Security:")} attack, defend, probe, guard
+${picocolors.dim("    C2:")}        c2-server, c2
+${picocolors.dim("    Git:")}      commit, pr, freeze, switch
+${picocolors.dim("    Project:")}  sort, web
+${picocolors.dim("    Other:")}    completions
+`);
 
 await program.parseAsync(process.argv);
