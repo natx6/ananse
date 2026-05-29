@@ -105,10 +105,10 @@ export interface BeaconResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Fleet
+// Reach
 // ---------------------------------------------------------------------------
 
-export interface FleetSummary {
+export interface ReachSummary {
   total: number;
   active: number;
   dead: number;
@@ -127,4 +127,6 @@ export interface C2ServerConfig {
   dbPath: string;
   checkinTimeout: number;         // ms before marking dead (default 600000)
   stalePruneInterval: number;     // ms between stale sweeps (default 60000)
+  cert?: string;                  // TLS cert file path (enables HTTPS)
+  key?: string;                   // TLS key file path
 }

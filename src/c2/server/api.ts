@@ -1,15 +1,16 @@
 import { Router } from "express";
-import { FleetRegistry } from "./fleet.js";
+import { ReachRegistry } from "./reach.js";
 import { TaskQueue } from "./taskQueue.js";
 import { authenticateOperator, authenticateImplant } from "./auth.js";
 import { emitAlert } from "../../guard/alert.js";
 import { logAudit } from "../../audit.js";
 import { analyzeTaskResult } from "./analysis.js";
+import { getLimits } from "../../license.js";
 import type { ImplantHeartbeat, CreateTaskRequest, BeaconResponse } from "../types.js";
 import type { BroadcastFn, WsEvent } from "./ws.js";
 
 export function createRouter(
-  registry: FleetRegistry,
+  registry: ReachRegistry,
   tasks: TaskQueue,
   apiKey: string,
   implantToken: string,
@@ -34,6 +35,15 @@ export function createRouter(
     // Auto-register if first beacon
     let implant = registry.get(hb.implantId);
     if (!implant) {
+      // Check tier limit before allowing new registration
+      const limits = getLimits();
+      const activeCount = registry.summary().active;
+      if (activeCount >= limits.maxImplants) {
+        return res.status(403).json({
+          error: `license limit reached: ${limits.maxImplants} active implants (current tier)`,
+        });
+      }
+
       registry.register({
         id: hb.implantId,
         name: hb.implantId,
@@ -92,12 +102,12 @@ export function createRouter(
   // -----------------------------------------------------------------------
 
   /** List all implants. */
-  router.get("/api/v1/operator/fleet", opAuth, (_req, res) => {
+  router.get("/api/v1/operator/reach", opAuth, (_req, res) => {
     res.json(registry.summary());
   });
 
   /** Get implant details. */
-  router.get("/api/v1/operator/fleet/:id", opAuth, (req, res) => {
+  router.get("/api/v1/operator/reach/:id", opAuth, (req, res) => {
     const id = req.params.id as string;
     const implant = registry.get(id);
     if (!implant) { res.status(404).json({ error: "implant not found" }); return; }

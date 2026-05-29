@@ -15,6 +15,8 @@ import {
   createCrawlTool,
   createBlastTool,
 } from "./tools.js";
+import { createSystemInfoTool, createDiskUsageTool, createNetworkInfoTool } from "./core/system.js";
+import { createChangeModeTool } from "./core/modeSwitcher.js";
 import { createBatchEditTool } from "./patch.js";
 import { createSubAgentTool } from "./subagent.js";
 import { createRememberTool } from "./remember.js";
@@ -29,14 +31,18 @@ import { createReconProcessesTool, createReconNetworkTool, createReconUsersTool,
 import { createPrivescSudoTool, createPrivescWritableTool, createPrivescKernelTool } from "./offense/privesc.js";
 import { createPersistSshKeysTool, createPersistStartupTool, createPersistSshConfigTool } from "./offense/persistence.js";
 import { createExploitPackageVulnsTool, createExploitServiceScanTool } from "./offense/exploit.js";
+import { createSshBruteforceTool, createFindSecretsTool, createWebProbeTool } from "./offense/credential.js";
+import { createShodanIPTool, createShodanSearchTool } from "./offense/shodan.js";
+import { createCveSearchTool, createCveDetailTool } from "./offense/cve.js";
 import { createReportTool } from "./offense/report.js";
 
 // C2 tools
-import { createC2FleetTool, createC2TaskCreateTool, createC2TaskListTool, createC2TaskDetailTool, createC2TaskCancelTool, createC2KillTool } from "./c2/tools.js";
+import { createC2ReachTool, createC2TaskCreateTool, createC2TaskListTool, createC2TaskDetailTool, createC2TaskCancelTool, createC2KillTool } from "./c2/tools.js";
 
 // Defense tools
 import { createMonitorFimSnapshotTool, createMonitorFimCheckTool, createMonitorRootkitTool, createMonitorProcessesTool } from "./defense/monitor.js";
 import { createComplianceSshTool, createCompliancePasswordTool, createComplianceMountTool, createComplianceAuditdTool } from "./defense/compliance.js";
+import { createAuditLogsTool, createAuditNetworkTool, createAuditUsersTool } from "./defense/audit.js";
 import { createSbomGenerateTool, createSbomCveCheckTool } from "./defense/sbom.js";
 
 import type { AnanseConfig } from "./utils.js";
@@ -62,6 +68,10 @@ const toolEntries: ToolEntry[] = [
   { name: "subagent", factory: createSubAgentTool, needsConfig: true },
   { name: "submit_plan", factory: createSubmitPlanTool as ToolFactory },
   { name: "remember", factory: createRememberTool as ToolFactory },
+  { name: "change_mode", factory: createChangeModeTool as ToolFactory },
+  { name: "system_info", factory: createSystemInfoTool as ToolFactory },
+  { name: "disk_usage", factory: createDiskUsageTool as ToolFactory },
+  { name: "network_info", factory: createNetworkInfoTool as ToolFactory },
 
   // Scanners
   { name: "scan_secrets", factory: createScanSecretsTool as ToolFactory },
@@ -83,10 +93,17 @@ const toolEntries: ToolEntry[] = [
   { name: "persist_ssh_config", factory: createPersistSshConfigTool as ToolFactory },
   { name: "exploit_package_vulns", factory: createExploitPackageVulnsTool as ToolFactory },
   { name: "exploit_service_scan", factory: createExploitServiceScanTool as ToolFactory },
+  { name: "ssh_bruteforce", factory: createSshBruteforceTool as ToolFactory },
+  { name: "find_secrets", factory: createFindSecretsTool as ToolFactory },
+  { name: "web_probe", factory: createWebProbeTool as ToolFactory },
+  { name: "shodan_ip", factory: createShodanIPTool as ToolFactory },
+  { name: "shodan_search", factory: createShodanSearchTool as ToolFactory },
+  { name: "cve_search", factory: createCveSearchTool as ToolFactory },
+  { name: "cve_detail", factory: createCveDetailTool as ToolFactory },
   { name: "report", factory: createReportTool as ToolFactory },
 
   // C2 (offense)
-  { name: "c2_fleet", factory: createC2FleetTool as ToolFactory },
+  { name: "c2_reach", factory: createC2ReachTool as ToolFactory },
   { name: "c2_task_create", factory: createC2TaskCreateTool as ToolFactory },
   { name: "c2_task_list", factory: createC2TaskListTool as ToolFactory },
   { name: "c2_task_detail", factory: createC2TaskDetailTool as ToolFactory },
@@ -102,6 +119,9 @@ const toolEntries: ToolEntry[] = [
   { name: "compliance_password", factory: createCompliancePasswordTool as ToolFactory },
   { name: "compliance_mount", factory: createComplianceMountTool as ToolFactory },
   { name: "compliance_auditd", factory: createComplianceAuditdTool as ToolFactory },
+  { name: "audit_logs", factory: createAuditLogsTool as ToolFactory },
+  { name: "audit_network", factory: createAuditNetworkTool as ToolFactory },
+  { name: "audit_users", factory: createAuditUsersTool as ToolFactory },
   { name: "sbom_generate", factory: createSbomGenerateTool as ToolFactory },
   { name: "sbom_cve_check", factory: createSbomCveCheckTool as ToolFactory },
 ];

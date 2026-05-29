@@ -113,7 +113,7 @@ async function resolveUserName(config: Record<string, string>): Promise<string |
 async function barePrompt(): Promise<string | symbol> {
   const rl = readline.createInterface({ input: processStdin, output: processStdout });
   try {
-    const answer = await rl.question(picocolors.green("> "));
+    const answer = await rl.question(picocolors.dim("\n  ── ") + picocolors.green("You » ") + picocolors.reset(""));
     return answer;
   } catch {
     console.log(picocolors.yellow("\nGoodbye."));
@@ -125,11 +125,15 @@ async function barePrompt(): Promise<string | symbol> {
 
 function formatMode(mode: string): string {
   switch (mode) {
-    case "offense": return picocolors.red(mode);
-    case "defense": return picocolors.green(mode);
-    default: return picocolors.dim(mode);
+    case "offense": return picocolors.inverse(picocolors.red(" OFFENSE "));
+    case "defense": return picocolors.inverse(picocolors.green(" DEFENSE "));
+    default: return picocolors.dim("normal");
   }
 }
+
+/** Color tags for mode-specific commands in help text */
+function offenseTag(): string { return picocolors.red("[offense]"); }
+function defenseTag(): string { return picocolors.green("[defense]"); }
 
 async function main(): Promise<void> {
   console.clear();
@@ -219,7 +223,7 @@ async function main(): Promise<void> {
     if (firstTurn) {
       response = await text({
         message: "How can I help?",
-        placeholder: "Build something, refactor, debug, explore...",
+        placeholder: "scan, deploy, audit, build...",
       });
       firstTurn = false;
     } else {
@@ -338,7 +342,7 @@ async function main(): Promise<void> {
       continue;
     }
 
-    console.log(picocolors.green(`You: ${input}`));
+    console.log(picocolors.dim("\n  ──┤ ") + picocolors.green(input) + picocolors.dim(" ├──"));
     const updatedSession = await runAgentLoop(
       input, config ?? {}, personality, fileCount, userName, currentSession,
     );
@@ -710,6 +714,45 @@ program
 
 // Tier 2 commands
 program
+  .command("capabilities")
+  .description("List all Ananse platform capabilities")
+  .action(() => {
+    console.log(picocolors.cyan("\n  Ananse — Platform Capabilities\n"));
+    console.log(picocolors.bold("  Modes:"));
+    console.log("    normal    General-purpose AI coding assistant");
+    console.log("    offense   Red-team auditor with C2 implant control");
+    console.log("    defense   Blue-team engineer for hardening & compliance");
+    console.log("");
+    console.log(picocolors.bold("  C2 Operations:"));
+    console.log("    c2 reach     List deployed implants");
+    console.log("    c2 task      Create, list, view, cancel tasks");
+    console.log("    c2 deploy    Build + deploy stager via SSH");
+    console.log("    c2 kill      Self-destruct an implant");
+    console.log("    c2 watch     Live-stream implant events");
+    console.log("");
+    console.log(picocolors.bold("  Offense Modules (27):"));
+    console.log("    recon      processes, network, users, scheduler, SUID");
+    console.log("    privesc    sudo, writable paths, kernel exploits");
+    console.log("    persist    SSH keys, startup, SSH config");
+    console.log("    exploit    package CVEs, service scanning");
+    console.log("    credential SSH brute-force, secrets discovery, web probing");
+    console.log("    shodan     IP lookup, device search, vulnerability queries");
+    console.log("    cve        CVE search and detail lookup (free, no key)");
+    console.log("");
+    console.log(picocolors.bold("  Defense Modules (13):"));
+    console.log("    monitor    FIM snapshot/check, rootkit, processes");
+    console.log("    compliance SSH, password policy, mounts, auditd");
+    console.log("    audit      log analysis, network audit, user audit");
+    console.log("    sbom       generate SBOM, CVE checking");
+    console.log("");
+    console.log(picocolors.bold("  Platform:"));
+    console.log("    System:    system info, disk usage, network info");
+    console.log("    Implants:  Linux, Windows, macOS");
+    console.log("    Transport: HTTP/HTTPS, WSS, SOCKS5 proxy");
+    console.log("    Build:     ./scripts/build-stager.sh --os <target>\n");
+  });
+
+program
   .command("web")
   .description("Trace the import dependency graph of a directory")
   .argument("[path]", "Directory to crawl", "src/")
@@ -1065,7 +1108,7 @@ program
 
 program
   .command("attack")
-  .description("Run offense mode against a target (SSH or local path)")
+  .description(`${offenseTag()} Run offense mode against a target (SSH or local path)`)
   .argument("<target>", "Target (user@host or ./path)")
   .option("--recon", "Recon only")
   .option("--all", "Full pentest suite")
@@ -1080,7 +1123,7 @@ program
 
 program
   .command("defend")
-  .description("Run defense mode against a target (SSH or local path)")
+  .description(`${defenseTag()} Run defense mode against a target (SSH or local path)`)
   .argument("<target>", "Target (user@host or ./path)")
   .option("--harden", "Full hardening assessment")
   .option("--monitor", "Monitoring only (rootkit, FIM, processes)")
@@ -1095,7 +1138,7 @@ program
 
 program
   .command("guard")
-  .description("Persistent monitoring — watch a remote target for drift")
+  .description(`${defenseTag()} Persistent monitoring — watch a remote target for drift`)
   .argument("<target>", "SSH target (user@host[:port])")
   .option("-i, --interval <seconds>", "Check interval in seconds", "300")
   .option("-o, --output <dir>", "Output directory for baseline and alerts")
@@ -1111,15 +1154,19 @@ program
 
 program
   .command("c2-server")
-  .description("Start the C2 command & control server")
+  .description(`${offenseTag()} Start the C2 command & control server`)
   .option("-p, --port <number>", "Port to listen on", "8443")
   .option("--host <address>", "Host to bind to", "0.0.0.0")
   .option("--db <path>", "SQLite database path")
-  .action((opts: { port?: string; host?: string; db?: string }) => {
+  .option("--cert <path>", "TLS cert file (enables HTTPS)")
+  .option("--key <path>", "TLS key file")
+  .action((opts: { port?: string; host?: string; db?: string; cert?: string; key?: string }) => {
     const server = startServer({
       port: opts.port ? parseInt(opts.port, 10) : 8443,
       host: opts.host,
       dbPath: opts.db,
+      cert: opts.cert,
+      key: opts.key,
     });
 
     // Handle shutdown
@@ -1251,13 +1298,34 @@ program
     console.log("");
   });
 
+program
+  .command("license")
+  .description("Show or set license key")
+  .argument("[action]", "Action: status (default), set <key>")
+  .argument("[value]", "License key value (for 'set')")
+  .action(async (action?: string, value?: string) => {
+    if (action === "set" && value) {
+      const { setLicenseKey, printLicenseStatus } = await import("./license.js");
+      const ok = setLicenseKey(value);
+      if (ok) {
+        console.log(picocolors.green(`\n  License key saved.\n`));
+        printLicenseStatus();
+      } else {
+        console.error(picocolors.red(`\n  Failed to save license key.\n`));
+      }
+    } else {
+      const { printLicenseStatus } = await import("./license.js");
+      printLicenseStatus();
+    }
+  });
+
 program.addHelpText("after", `
 ${picocolors.cyan("  Categories:")}
 ${picocolors.dim("    Core:")}     configure, init, status, doctor, config, mode
 ${picocolors.dim("    Sessions:")} sessions, spin, pop, stash, rename, rm, fork, diff, search
 ${picocolors.dim("    AI:")}       build, refactor, review, testgen, explain, patch, weave, heal
-${picocolors.dim("    Security:")} attack, defend, probe, guard
-${picocolors.dim("    C2:")}        c2-server, c2
+${picocolors.red("    Offense:")}  attack, c2-server, c2
+${picocolors.green("    Defense:")}  defend, guard
 ${picocolors.dim("    Git:")}      commit, pr, freeze, switch
 ${picocolors.dim("    Project:")}  sort, web
 ${picocolors.dim("    Other:")}    completions

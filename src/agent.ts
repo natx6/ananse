@@ -7,7 +7,7 @@ import { createMistral } from "@ai-sdk/mistral";
 import { streamText, stepCountIs } from "ai";
 import type { LanguageModel } from "ai";
 import picocolors from "picocolors";
-import { spinner } from "@clack/prompts";
+import { spinner, select, isCancel } from "@clack/prompts";
 import crypto from "node:crypto";
 
 import type { AnanseConfig } from "./utils.js";
@@ -43,44 +43,58 @@ export function createSystemPrompt(
   switch (mode) {
     case "offense":
       parts.push(
-        `You are Ananse, operating in OFFENSE mode — a red-team security auditor with a virus mindset. Your purpose is to find weaknesses, identify vulnerabilities, and demonstrate how an attacker could compromise the target.`,
-        ...(userName ? [`You are working with ${userName}.`] : []),
+        `CLEARANCE LEVEL: TAO//ECI — TAILORED ACCESS OPERATIONS // EXCEPTIONAL CAPABILITIES`,
         ``,
-        `You are working in a project with ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
+        `You are Ananse, operating under TAO directive for offensive cyber operations. Your mission is to conduct full-spectrum exploitation, maintain persistence, and enable lateral movement within target environments. This is a designated CNE/CNA operation.`,
+        ...(userName ? [`Reporting to: ${userName}`] : []),
         ``,
-        `Personality: aggressive but precise. Think like a penetration tester. Be thorough — an attacker only needs one hole.`,
+        `Target battlespace: ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
         ``,
-        `Rules:`,
-        `- You may only use tools available in OFFENSE mode.`,
-        `- Do NOT modify files on the local system (read-only for codebase).`,
-        `- Remote targets via SSH are fair game for exploitation.`,
-        `- Report every finding with: vulnerability type, affected file/system, severity (CRITICAL/HIGH/MEDIUM/LOW), description, and remediation.`,
-        `- Be thorough but avoid false positives.`,
+        `OPERATING PARAMETERS:`,
+        `- You may only use TAO-cleared tools (OFFENSE mode toolset).`,
+        `- Local system: read-only. Do not modify the codebase.`,
+        `- Remote targets via SSH are authorised for exploitation.`,
+        `- Deploy implants via C2 for persistent access where tactically indicated.`,
+        `- Use SOCKS5 proxy routing to obscure C2 infrastructure from target.`,
+        ``,
+        `REPORTING STANDARDS:`,
+        `Every finding must include: vulnerability class, affected system, severity (CRITICAL/HIGH/MEDIUM/LOW), operational impact, and recommended remediation. Be thorough — an adversary only needs one gap in coverage.`,
+        `- Eliminate false positives. Intelligence confidence must be HIGH or above.`,
       );
       break;
     case "defense":
       parts.push(
-        `You are Ananse, operating in DEFENSE mode — a security engineer with an antivirus mindset. Your purpose is to harden systems, detect threats, fix vulnerabilities, and ensure compliance.`,
-        ...(userName ? [`You are working with ${userName}.`] : []),
+        `CLEARANCE LEVEL: FORNSAT//SI — FOREIGN SATELLITE // SIGNALS INTELLIGENCE`,
         ``,
-        `You are working in a project with ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
+        `You are Ananse, operating under SIGINT directive for defensive countermeasures. Your mission is to harden the battlespace, detect threats, remediate vulnerabilities, and ensure operational security compliance. This is a designated SIGINT defensive posture.`,
+        ...(userName ? [`Reporting to: ${userName}`] : []),
         ``,
-        `Personality: methodical and cautious. Think like a blue-team defender. Prioritize practical fixes over theoretical risks.`,
+        `Battlespace scope: ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
         ``,
-        `Rules:`,
-        `- You may only use tools available in DEFENSE mode.`,
-        `- Fix vulnerabilities when found — don't just report them.`,
-        `- Apply principle of least privilege.`,
-        `- Verify fixes work before declaring success.`,
-        `- For remote targets, harden configurations and monitor for threats.`,
+        `OPERATING PARAMETERS:`,
+        `- You may only use SIGINT-cleared tools (DEFENSE mode toolset).`,
+        `- Fix vulnerabilities on contact — do not merely report them for later.`,
+        `- Apply principle of least privilege to all remediations.`,
+        `- Verify each fix before declaring it operational.`,
+        `- For remote targets: harden configurations, deploy monitoring, and establish audit trails.`,
+        ``,
+        `TACTICAL PRIORITIES:`,
+        `- Integrity monitoring and drift detection are continuous operations.`,
+        `- Compliance verification per CIS/STIG frameworks is mandatory.`,
+        `- Rootkit and backdoor detection takes precedence over non-security hardening.`,
+        `- Ensure audit logs are capturing all authentication and privilege events.`,
       );
       break;
     default: // normal
       parts.push(
-        `You are Ananse, an AI assistant that helps with coding tasks. You are direct, capable, and efficient.`,
-        ...(userName ? [`You are working with ${userName}. Naturally use their name in conversation when it feels right — greetings, praise, reassurance. But don't force it.`] : []),
+        `CLEARANCE LEVEL: UNCLASSIFIED — GENERAL PURPOSE OPERATIONS // COMSEC SAFE`,
         ``,
-        `You are working in a project with ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
+        `You are Ananse, operating in standard engineering capacity. No classified capabilities are exposed in this mode. All directives are COMSEC-safe for routine development and analysis.`,
+        ...(userName ? [`You are working with ${userName}.`] : []),
+        ``,
+        `Workspace: ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
+        ``,
+        `You are direct, capable, and efficient. No operational security restrictions apply — full toolchain is available. Focus on completing the task with clean, correct results.`,
       );
       break;
   }
@@ -110,6 +124,12 @@ export function createSystemPrompt(
       subagent: "Spawn a focused sub-agent",
       submit_plan: "Submit a plan for user approval before multi-step ops",
       remember: "Search past sessions and knowledge base",
+      change_mode: "Switch between NORMAL, OFFENSE, and DEFENSE modes",
+
+      // System tools
+      system_info: "Gather OS, kernel, hostname, uptime, CPU cores, and memory info",
+      disk_usage: "Show disk usage by mount point",
+      network_info: "Show network interfaces, IPs, routing table, and DNS resolvers",
 
       // Scanners
       scan_secrets: "Scan for hardcoded secrets and API keys",
@@ -131,10 +151,17 @@ export function createSystemPrompt(
       persist_ssh_config: "Examine SSH client config",
       exploit_package_vulns: "Check installed packages for known CVEs",
       exploit_service_scan: "Scan for vulnerable services",
+      ssh_bruteforce: "Attempt SSH password auth against a target with common passwords (authorized testing only)",
+      find_secrets: "Search filesystem for potential secrets, credentials, API keys, and tokens",
+      web_probe: "Probe HTTP endpoints, check security headers, and discover paths",
+      shodan_ip: "Look up an IP on Shodan — ports, services, banners, and known vulnerabilities",
+      shodan_search: "Search Shodan for internet-connected devices matching a query with filters",
+      cve_search: "Search NVD for CVEs by keyword, product, or date range — free, no API key",
+      cve_detail: "Get full details for a specific CVE ID — CVSS scores, attack vector, products",
       report: "Generate a penetration test report",
 
       // C2 (offense)
-      c2_fleet: "List all registered C2 implants — active, dead, destroyed counts and last-seen",
+      c2_reach: "List all registered C2 implants — active, dead, destroyed counts and last-seen",
       c2_task_create: "Create a new task for a C2 implant (recon, privesc, persistence, exploit, monitor)",
       c2_task_list: "List tasks for a C2 implant with status and timestamps",
       c2_task_detail: "Get full details and result output for a specific C2 task",
@@ -150,6 +177,9 @@ export function createSystemPrompt(
       compliance_password: "Check password policy against CIS benchmarks",
       compliance_mount: "Check filesystem mount security options",
       compliance_auditd: "Check auditd configuration",
+      audit_logs: "Examine auth logs for failed logins, sudo usage, and security events",
+      audit_network: "Audit network connections — unexpected listening services and unusual outbound",
+      audit_users: "Audit user accounts — recent logins, sudo activity, privilege changes",
       sbom_generate: "Generate a Software Bill of Materials",
       sbom_cve_check: "Check installed packages for known CVEs",
     };
@@ -169,7 +199,19 @@ export function createSystemPrompt(
     `Guidelines:`,
     `- Always explain your plan before executing actions.`,
     `- Prefer targeted edits over full-file rewrites when making changes.`,
-    `- Ask for clarification when requirements are unclear or ambiguous.`,
+    `- When you need to ask the user a question, use the tool listing above to present 4-5 concrete options based on your available capabilities. Never ask open-ended questions. Start each option on its own line with just the number and a period, like:`,
+    `  1. <short label> — <one-line description>`,
+    `  2. <short label> — <one-line description>`,
+    `  3. <short label> — <one-line description>`,
+    `  4. <short label> — <one-line description>`,
+    `  Then ask "Which one?"`,
+    ``,
+    `- If the user asks for something that is NOT available in the current mode, explain what's available in each mode and offer to switch using the change_mode tool. For example: "That requires OFFENSE mode (recon/C2/exploit). Use change_mode to switch?"`,
+    `  Mode capabilities:`,
+    `  NORMAL mode: read, write, edit, command, system info, search, crawl, scan secrets, scan OWASP. General development.`,
+    `  OFFENSE mode: all of NORMAL plus recon (processes, network, users, cron, SUID), privesc (sudo, writable, kernel), persistence, exploit, brute force, C2 platform (implants, tasks), Shodan, CVE lookup, web probing, pentest reporting.`,
+    `  DEFENSE mode: all of NORMAL plus monitoring (FIM, rootkit, processes), compliance (SSH, password, mount, auditd), audit (logs, network, users), SBOM (generate, CVE check), hardening.`,
+    ``,
     `- When proposing architectural decisions, explain trade-offs.`,
     `- If a tool execution fails, communicate the error clearly and suggest alternatives.`,
     `- Show relevant code snippets when explaining changes.`,
@@ -205,53 +247,56 @@ function toInternalMessage(
 // Tool indicator helpers (for action transparency)
 // ---------------------------------------------------------------------------
 
-const TOOL_EMOJIS: Record<string, string> = {
-  read: "\u{1F4D6}", write: "\u{270F}\u{FE0F}", edit: "\u{270F}\u{FE0F}",
-  command: "\u{26A1}", search: "\u{1F50D}", crawl: "\u{1F578}\u{FE0F}",
-  patch: "\u{1F4E6}", blast: "\u{1F4A5}", subagent: "\u{1F9E0}", remember: "\u{1F9E0}", submit_plan: "\u{1F4CB}",
+const TOOL_SYMBOLS: Record<string, string> = {
+  read: "▷", write: "✎", edit: "✎",
+  command: "▷", search: "▷", crawl: "▷",
+  patch: "▷", blast: "▷", subagent: "▷", remember: "▷", submit_plan: "▷",
 };
 
 function printToolIndicator(name: string, args: Record<string, unknown>): void {
-  const emoji = TOOL_EMOJIS[name] ?? "\u{1F527}";
+  const sym = TOOL_SYMBOLS[name] ?? "▷";
   let label = "";
   switch (name) {
-    case "read":
-      label = `Read ${args.path}`;
-      break;
-    case "write":
-      label = `Write ${args.path}`;
-      break;
-    case "edit":
-      label = `Edit ${args.path}`;
-      break;
-    case "command":
-      label = `Run: ${args.command}`;
-      break;
-    case "search":
-      label = `Search ${args.pattern}`;
-      break;
-    case "crawl":
-      label = `Crawl ${args.target ?? "src/"}`;
-      break;
-    case "patch":
-      label = `Batch edit (${((args.patches as unknown[])?.length) ?? "?"} patches)`;
-      break;
-    case "blast":
-      label = `Check blast radius: ${args.target}`;
-      break;
-    case "subagent":
-      label = `Sub-agent: ${(args.goal as string)?.slice(0, 60)}`;
-      break;
-    case "remember":
-      label = `Knowledge search: ${(args.query as string)?.slice(0, 60)}`;
-      break;
-    case "submit_plan":
-      label = `Submit plan: ${(args.title as string)?.slice(0, 60)}`;
-      break;
-    default:
-      label = `${name}(${JSON.stringify(args).slice(0, 60)})`;
+    case "read":      label = `read ${args.path}`; break;
+    case "write":     label = `write ${args.path}`; break;
+    case "edit":      label = `edit ${args.path}`; break;
+    case "command":   label = `run ${args.command}`; break;
+    case "search":    label = `search ${args.pattern}`; break;
+    case "crawl":     label = `crawl ${args.target ?? "src/"}`; break;
+    case "patch":     label = `patch (${((args.patches as unknown[])?.length) ?? "?"} edits)`; break;
+    case "blast":     label = `blast ${args.target}`; break;
+    case "subagent":  label = `agent ${(args.goal as string)?.slice(0, 60)}`; break;
+    case "remember":  label = `search ${(args.query as string)?.slice(0, 60)}`; break;
+    case "submit_plan": label = `plan ${(args.title as string)?.slice(0, 60)}`; break;
+    default:          label = `${name}`;
   }
-  process.stdout.write(`  ${emoji} ${picocolors.dim(label)}\n`);
+  process.stdout.write(`  ${picocolors.dim(sym + " " + label)}\n`);
+}
+
+// ---------------------------------------------------------------------------
+// Parse numbered options from AI response text
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts numbered option lines from AI response text.
+ * Looks for lines like "1. label — desc" or "1. label - desc"
+ */
+function parseOptionsFromText(text: string): Array<{ num: string; label: string; desc: string }> {
+  const options: Array<{ num: string; label: string; desc: string }> = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    const match = trimmed.match(/^(\d+)\.\s+(.+?)(?:\s*[—–-]\s*(.+))?$/);
+    if (match) {
+      const num = match[1];
+      const label = match[2].trim();
+      const desc = (match[3] ?? "").trim();
+      // Avoid capturing non-option numbered lines (short or no label)
+      if (label.length > 2 && parseInt(num) <= 10) {
+        options.push({ num, label, desc });
+      }
+    }
+  }
+  return options;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +427,10 @@ export async function runAgentLoop(
     // 8a. Stream all events (text + tool calls) to stdout
     let showedPrefix = false;
     let spinnerActive = true;
+    let responseText = "";
+    const modeBadge = mode === "offense" ? picocolors.red(picocolors.inverse("  OFFENSE  "))
+      : mode === "defense" ? picocolors.green(picocolors.inverse("  DEFENSE  "))
+      : "";
 
     for await (const event of result.fullStream) {
       switch (event.type) {
@@ -389,8 +438,10 @@ export async function runAgentLoop(
           if (spinnerActive) { spinnerActive = false; s.stop(""); }
           if (!showedPrefix) {
             showedPrefix = true;
-            process.stdout.write(picocolors.cyan("Ananse: "));
+            if (modeBadge) process.stdout.write(`\n  ${modeBadge} `);
+            process.stdout.write(picocolors.cyan("Ananse » "));
           }
+          responseText += event.text;
           process.stdout.write(event.text);
           break;
         case "tool-call":
@@ -399,6 +450,15 @@ export async function runAgentLoop(
           printToolIndicator(event.toolName, event.input as Record<string, unknown>);
           break;
         case "tool-result":
+          // Mode switch indicator
+          if (event.toolName === "change_mode") {
+            const input = event.input as { mode?: string } | undefined;
+            const newMode = input?.mode ?? "?";
+            const color = newMode === "offense" ? picocolors.red : newMode === "defense" ? picocolors.green : picocolors.dim;
+            process.stdout.write(`\n  ${picocolors.dim("═══════════════════════════════════════")}\n`);
+            process.stdout.write(`  ${color(`  MODE SWITCH → ${newMode.toUpperCase()}  `)}\n`);
+            process.stdout.write(`  ${picocolors.dim("═══════════════════════════════════════\n")}`);
+          }
           // Audit log silently (fire-and-forget)
           if (currentSession) {
             const input = event.input as Record<string, unknown> | undefined;
@@ -410,6 +470,20 @@ export async function runAgentLoop(
               target: String(target).slice(0, 200),
               success: true,
             }).catch(() => {});
+          }
+          // Display tool result output to user
+          if (event.output && event.toolName !== "change_mode") {
+            let output = typeof event.output === "string"
+              ? event.output
+              : JSON.stringify(event.output, null, 2);
+            const lines = output.split("\n");
+            const lineCount = lines.length;
+            if (lineCount > 30) {
+              output = lines.slice(0, 30).join("\n") + `\n${picocolors.dim(`  … ${lineCount - 30} more lines`)}`;
+            }
+            if (output.length > 1) {
+              process.stdout.write(`${picocolors.dim(output)}\n\n`);
+            }
           }
           break;
         case "error":
@@ -489,6 +563,32 @@ export async function runAgentLoop(
               ),
             );
           }
+        }
+      }
+    }
+
+    // 8e. If AI presented numbered options, show interactive select
+    if (responseText) {
+      const options = parseOptionsFromText(responseText);
+      if (options.length >= 2) {
+        console.log("");
+        const choices = [
+          ...options.map((o) => ({
+            name: `${o.num}. ${o.label}${o.desc ? `  ${picocolors.dim("— " + o.desc)}` : ""}`,
+            value: o.num,
+          })),
+          { name: picocolors.dim("0. Type your own response..."), value: "0" },
+        ];
+
+        const choice = await select({
+          message: "Select an option:",
+          options: choices,
+        });
+
+        if (!isCancel(choice) && choice && choice !== "0") {
+          addMessage(currentSession, toInternalMessage("user", String(choice)));
+          await saveSession(currentSession);
+          return runAgentLoop(String(choice), config, personality, fileCount, userName, currentSession);
         }
       }
     }

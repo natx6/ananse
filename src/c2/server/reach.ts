@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
-import type { Implant, ImplantHeartbeat, ImplantRegistration, FleetSummary, ImplantConfig } from "../types.js";
+import type { Implant, ImplantHeartbeat, ImplantRegistration, ReachSummary, ImplantConfig } from "../types.js";
 
-export class FleetRegistry {
+export class ReachRegistry {
   private db: Database.Database;
 
   constructor(db: Database.Database) {
@@ -62,8 +62,8 @@ export class FleetRegistry {
     return rows.map((r) => this.rowToImplant(r));
   }
 
-  /** Get fleet summary counts. */
-  summary(): FleetSummary {
+  /** Get reach summary counts. */
+  summary(): ReachSummary {
     const rows = this.db.prepare(`
       SELECT status, COUNT(*) as count FROM implants GROUP BY status
     `).all() as { status: string; count: number }[];

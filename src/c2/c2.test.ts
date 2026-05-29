@@ -2,17 +2,17 @@ import { describe, it, expect, afterEach } from "vitest";
 import { createServer, type Server } from "node:http";
 import express from "express";
 import Database from "better-sqlite3";
-import { FleetRegistry } from "./server/fleet.js";
+import { ReachRegistry } from "./server/reach.js";
 import { TaskQueue } from "./server/taskQueue.js";
 import { createRouter } from "./server/api.js";
-import type { ImplantHeartbeat, CreateTaskRequest, BeaconResponse, FleetSummary } from "./types.js";
+import type { ImplantHeartbeat, CreateTaskRequest, BeaconResponse, ReachSummary } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // In-memory test server
 // ---------------------------------------------------------------------------
 
 interface TestApp {
-  registry: FleetRegistry;
+  registry: ReachRegistry;
   taskQueue: TaskQueue;
   apiKey: string;
   implantToken: string;
@@ -43,7 +43,7 @@ function setupApp(): TestApp {
     CREATE INDEX IF NOT EXISTS idx_implants_status ON implants(status);
   `);
 
-  const registry = new FleetRegistry(db);
+  const registry = new ReachRegistry(db);
   const taskQueue = new TaskQueue(db);
   const apiKey = "test-op-key";
   const implantToken = "test-imp-token";
@@ -129,8 +129,8 @@ describe("C2 integration", () => {
     expect(resp1.command).toBe("none");
     expect(resp1.tasks).toEqual([]);
 
-    // 2. Fleet shows 1 active
-    const f1 = await (await opFetch(app, "/api/v1/operator/fleet")).json() as FleetSummary;
+    // 2. Reach shows 1 active
+    const f1 = await (await opFetch(app, "/api/v1/operator/reach")).json() as ReachSummary;
     expect(f1.total).toBe(1);
     expect(f1.active).toBe(1);
 
@@ -199,10 +199,10 @@ describe("C2 integration", () => {
   it("auth rejects requests without valid token", async () => {
     const app = setupApp(); apps.push(app);
 
-    const res1 = await fetch(`${app.base}/api/v1/operator/fleet`);
+    const res1 = await fetch(`${app.base}/api/v1/operator/reach`);
     expect(res1.status).toBe(401);
 
-    const res2 = await fetch(`${app.base}/api/v1/operator/fleet`, {
+    const res2 = await fetch(`${app.base}/api/v1/operator/reach`, {
       headers: { Authorization: "Bearer wrong-key" },
     });
     expect([401, 403]).toContain(res2.status);
