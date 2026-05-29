@@ -221,6 +221,16 @@ async function main(): Promise<void> {
           ? `Resumed session: ${picocolors.cyan(loaded.name)}`
           : `Resumed session (${loaded.messages.length} messages)`;
         console.log(picocolors.green(`  ${lines}\n`));
+        // Replay previous conversation
+        for (const msg of loaded.messages) {
+          if (msg.role === "user") {
+            console.log(picocolors.dim(`  ── You » `) + picocolors.green(msg.content.slice(0, 200)));
+          } else if (msg.role === "assistant" && msg.content) {
+            const preview = msg.content.length > 200 ? msg.content.slice(0, 200) + "…" : msg.content;
+            console.log(`  ${picocolors.dim(preview)}`);
+          }
+        }
+        console.log("");
       }
     }
   }
