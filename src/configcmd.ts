@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import picocolors from "picocolors";
 
+
 const CONFIG_PATH = join(homedir(), ".ananse", "config.json");
 
 async function readConfig(): Promise<Record<string, string>> {
@@ -36,7 +37,9 @@ export async function configGet(key?: string): Promise<void> {
       return;
     }
     for (const [k, v] of Object.entries(config)) {
-      const val = k === "apiKey" && v.length > 12 ? v.slice(0, 8) + "…" + v.slice(-4) : v;
+      const val = k === "apiKey" && v.length > 12
+        ? v.slice(0, 8) + "…" + v.slice(-4)
+        : v;
       console.log(`  ${picocolors.white(k)}: ${picocolors.cyan(val)}`);
     }
     console.log("");
@@ -54,3 +57,5 @@ export async function configSet(key: string, value: string): Promise<void> {
   await writeConfig(config);
   console.log(picocolors.green(`  Set ${picocolors.white(key)} to ${picocolors.cyan(value)}\n`));
 }
+
+

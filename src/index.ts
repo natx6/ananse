@@ -110,8 +110,15 @@ async function resolveUserName(config: Record<string, string>): Promise<string |
   return config.userName;
 }
 
+const promptHistory: string[] = [];
+
 async function barePrompt(): Promise<string | symbol> {
-  const rl = readline.createInterface({ input: processStdin, output: processStdout });
+  const rl = readline.createInterface({
+    input: processStdin,
+    output: processStdout,
+    history: promptHistory,
+    historySize: 100,
+  });
   try {
     const answer = await rl.question(picocolors.dim("\n  ── ") + picocolors.green("You » ") + picocolors.reset(""));
     return answer;
@@ -126,14 +133,14 @@ async function barePrompt(): Promise<string | symbol> {
 function formatMode(mode: string): string {
   switch (mode) {
     case "offense": return picocolors.inverse(picocolors.red(" OFFENSE "));
-    case "defense": return picocolors.inverse(picocolors.green(" DEFENSE "));
+    case "defense": return picocolors.inverse(picocolors.blue(" DEFENSE "));
     default: return picocolors.dim("normal");
   }
 }
 
 /** Color tags for mode-specific commands in help text */
 function offenseTag(): string { return picocolors.red("[offense]"); }
-function defenseTag(): string { return picocolors.green("[defense]"); }
+function defenseTag(): string { return picocolors.blue("[defense]"); }
 
 async function main(): Promise<void> {
   console.clear();
@@ -276,8 +283,25 @@ async function main(): Promise<void> {
           } else if (["normal", "offense", "defense"].includes(newMode)) {
             flatConfig.mode = newMode;
             await writeConfigFile(flatConfig);
-            console.log(picocolors.green(`  Mode switched to: ${picocolors.white(newMode)}\n`));
+            if (config) config.mode = newMode;
+            const ms = spinner();
+            ms.start(`Loading ${newMode.toUpperCase()} modules...`);
+            await new Promise((r) => setTimeout(r, 1200));
+            ms.stop("");
+            const banner = newMode === "offense" ? [
+              `  ${picocolors.red("╔══════════════════════════════════════╗")}`,
+              `  ${picocolors.red("║")}            ${picocolors.inverse(picocolors.red(" OFFENSE MODE "))}            ${picocolors.red("║")}`,
+              `  ${picocolors.red("║")}    TAO//ECI — Full Spectrum Ops     ${picocolors.red("║")}`,
+              `  ${picocolors.red("╚══════════════════════════════════════╝")}`,
+            ] : newMode === "defense" ? [
+              `  ${picocolors.blue("╔══════════════════════════════════════╗")}`,
+              `  ${picocolors.blue("║")}            ${picocolors.inverse(picocolors.blue(" DEFENSE MODE "))}            ${picocolors.blue("║")}`,
+              `  ${picocolors.blue("║")}   FORNSAT//SI — SIGINT Defense      ${picocolors.blue("║")}`,
+              `  ${picocolors.blue("╚══════════════════════════════════════╝")}`,
+            ] : [];
+            for (const line of banner) console.log(line);
             printModeInfo(newMode as "normal" | "offense" | "defense");
+            currentSession = createSession(config ?? {}, personality, fileCount);
           } else {
             console.log(picocolors.yellow(`\n  Unknown mode: ${newMode}. Use normal, offense, or defense.\n`));
           }
@@ -339,6 +363,40 @@ async function main(): Promise<void> {
         default:
           console.log(picocolors.yellow(`\n  Unknown command: /${cmd}. Try /help\n`));
       }
+      continue;
+    }
+
+    // Natural-language mode switch detection
+    const modeSingle = input.match(/^\s*(normal|offense|defence|defense)\s*$/i);
+    const modePhrase = input.match(/^\s*(?:switch|change|go|set)\s+to\s+(normal|offense|defence|defense)\s*$/i);
+    const modeMatch = modeSingle ?? modePhrase;
+    if (modeMatch) {
+      let targetMode = modeMatch[1].toLowerCase();
+      if (targetMode === "defence") targetMode = "defense";
+      flatConfig.mode = targetMode;
+      await writeConfigFile(flatConfig);
+      if (config) config.mode = targetMode;
+
+      const s = spinner();
+      s.start(`Loading ${targetMode.toUpperCase()} modules...`);
+      await new Promise((r) => setTimeout(r, 1200));
+      s.stop("");
+
+      const banner = targetMode === "offense" ? [
+        `  ${picocolors.red("╔══════════════════════════════════════╗")}`,
+        `  ${picocolors.red("║")}            ${picocolors.inverse(picocolors.red(" OFFENSE MODE "))}            ${picocolors.red("║")}`,
+        `  ${picocolors.red("║")}    TAO//ECI — Full Spectrum Ops     ${picocolors.red("║")}`,
+        `  ${picocolors.red("╚══════════════════════════════════════╝")}`,
+      ] : targetMode === "defense" ? [
+        `  ${picocolors.blue("╔══════════════════════════════════════╗")}`,
+        `  ${picocolors.blue("║")}            ${picocolors.inverse(picocolors.blue(" DEFENSE MODE "))}            ${picocolors.blue("║")}`,
+        `  ${picocolors.blue("║")}   FORNSAT//SI — SIGINT Defense      ${picocolors.blue("║")}`,
+        `  ${picocolors.blue("╚══════════════════════════════════════╝")}`,
+      ] : [];
+      for (const line of banner) console.log(line);
+
+      printModeInfo(targetMode as "normal" | "offense" | "defense");
+      currentSession = createSession(config ?? {}, personality, fileCount);
       continue;
     }
 

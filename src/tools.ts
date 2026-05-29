@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fastGlob from "fast-glob";
 import { requestPermission } from "./permission.js";
+import { resolveUserPath } from "./pathResolver.js";
 import { crawlDependencies, crawlDirectory, computeReverseDeps } from "./cobweb.js";
 import { detectAndCondense } from "./diagnose.js";
 import type { ToolResult } from "./types.js";
@@ -39,6 +40,17 @@ export function createReadTool() {
         return { success: true, data: content };
       } catch (err: unknown) {
         if (isNodeError(err) && err.code === "ENOENT") {
+          // Try to resolve the path before giving up
+          const resolved = await resolveUserPath(path);
+          if (resolved && resolved.path !== path) {
+            try {
+              const content = await readFile(resolved.path, "utf-8");
+              return {
+                success: true,
+                data: `[Note: path "${path}" resolved to "${resolved.path}"${resolved.note ? ` — ${resolved.note}` : ""}]\n\n${content}`,
+              };
+            } catch { /* fall through to original error */ }
+          }
           return { success: false, data: "", error: `File not found: ${path}` };
         }
         return { success: false, data: "", error: toErrorMessage(err) };
@@ -93,6 +105,21 @@ export function createEditTool() {
         return { success: true, data: "File updated successfully" };
       } catch (err: unknown) {
         if (isNodeError(err) && err.code === "ENOENT") {
+          const resolved = await resolveUserPath(path);
+          if (resolved && resolved.path !== path) {
+            try {
+              const content = await readFile(resolved.path, "utf-8");
+              if (!content.includes(oldString)) {
+                return { success: false, data: "", error: `String not found in file: ${oldString} (tried resolved path: ${resolved.path})` };
+              }
+              const updated = content.replace(oldString, newString);
+              await writeFile(resolved.path, updated, "utf-8");
+              return {
+                success: true,
+                data: `File updated successfully at resolved path: ${resolved.path}${resolved.note ? ` (${resolved.note})` : ""}`,
+              };
+            } catch { /* fall through */ }
+          }
           return { success: false, data: "", error: `File not found: ${path}` };
         }
         return { success: false, data: "", error: toErrorMessage(err) };

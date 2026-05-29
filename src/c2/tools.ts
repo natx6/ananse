@@ -47,7 +47,7 @@ export function createC2TaskCreateTool() {
     description: "Create a new task for a C2 implant. The implant will pick it up on its next beacon and execute it.",
     inputSchema: z.object({
       implantId: z.string().min(1).describe("Implant ID to target"),
-      type: z.string().min(1).describe("Task type: recon_processes, recon_network, recon_users, recon_cron, recon_suid, recon_all, privesc_sudo, privesc_writable, privesc_kernel, privesc_all, persistence_ssh, persistence_startup, persistence_all, exploit_packages, exploit_services, exploit_all, monitor_fim, monitor_rootkit, monitor_all, brute_sudo, brute_ssh, brute_local, brute_all"),
+      type: z.string().min(1).describe("Task type: recon_processes, recon_network, recon_users, recon_cron, recon_suid, recon_all, privesc_sudo, privesc_writable, privesc_kernel, privesc_all, persistence_ssh, persistence_startup, persistence_all, exploit_packages, exploit_services, exploit_all, monitor_fim, monitor_rootkit, monitor_all, brute_sudo, brute_ssh, brute_local, brute_all, credential_shadow, credential_browsers, credential_ssh_keys, credential_configs, credential_all, lateral_ssh, lateral_all, collect_keylog, collect_screenshot, collect_clipboard, collect_all, bypass_amsi, bypass_etw, bypass_all"),
       params: z.record(z.unknown()).optional().describe("Optional task parameters as JSON object"),
     }),
     execute: async (input: { implantId: string; type: string; params?: Record<string, unknown> }): Promise<ToolResult> => {

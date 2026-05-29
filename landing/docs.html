@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docs — ANANSE</title>
+  <meta name="description" content="ANANSE platform documentation — architecture, modules, C2, deployment, and API reference." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-alt: #f7f7f7;
+      --border: #e5e5e5;
+      --border-light: #f0f0f0;
+      --text: #111111;
+      --text-secondary: #666666;
+      --text-dim: #999999;
+      --accent: #000000;
+      --font-sans: 'Inter', -apple-system, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+    }
+
+    /* ---- sidebar ---- */
+    .sidebar {
+      width: 260px;
+      min-height: 100vh;
+      border-right: 1px solid var(--border-light);
+      padding: 2rem 1.5rem;
+      position: sticky;
+      top: 0;
+      align-self: start;
+      flex-shrink: 0;
+    }
+
+    .sidebar .back {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .sidebar .back:hover { color: var(--text); }
+
+    .sidebar .logo {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 2rem;
+      display: block;
+      text-decoration: none;
+    }
+
+    .sidebar nav { display: flex; flex-direction: column; gap: 0.25rem; }
+
+    .sidebar nav a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 0.4rem 0.75rem;
+      border-radius: 4px;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .sidebar nav a:hover,
+    .sidebar nav a.active {
+      background: var(--bg-alt);
+      color: var(--text);
+    }
+
+    .sidebar .section-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      padding: 0.4rem 0.75rem;
+      margin-top: 1rem;
+    }
+
+    /* ---- main ---- */
+    .main {
+      flex: 1;
+      max-width: 800px;
+      padding: 3rem 3rem 5rem;
+    }
+
+    .main h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .main h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin: 3rem 0 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .main h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 2rem 0 0.5rem;
+    }
+
+    .main p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      margin-bottom: 1rem;
+    }
+
+    .main ul, .main ol {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      margin: 0 0 1.5rem 1.25rem;
+    }
+
+    .main li { margin-bottom: 0.25rem; }
+
+    .main code {
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      background: var(--bg-alt);
+      padding: 0.15em 0.4em;
+      border-radius: 3px;
+    }
+
+    .main pre {
+      background: var(--bg-alt);
+      border: 1px solid var(--border-light);
+      padding: 1.25rem;
+      margin: 0.75rem 0 1.5rem;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .main pre code {
+      background: none;
+      padding: 0;
+      font-size: inherit;
+    }
+
+    .main .note {
+      background: var(--bg-alt);
+      border-left: 3px solid var(--text);
+      padding: 1rem 1.25rem;
+      margin: 1rem 0 1.5rem;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .main .note strong { color: var(--text); }
+
+    .main table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0 1.5rem;
+      font-size: 0.85rem;
+    }
+
+    .main th, .main td {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .main th {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .main td { color: var(--text-secondary); }
+
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; min-height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border-light); padding: 1.25rem 1.5rem; }
+      .sidebar .logo { margin-bottom: 1rem; }
+      .main { padding: 2rem 1.5rem; }
+      .main h1 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <a href="index.html" class="back">← Home</a>
+  <a href="index.html" class="logo">ANANSE</a>
+  <nav>
+    <a href="#overview" class="active">Overview</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#c2">C2 Platform</a>
+    <a href="#implant">Implant</a>
+    <a href="#modules">Modules</a>
+    <a href="#transport">Transport</a>
+    <a href="#stealth">Stealth</a>
+    <a href="#deployment">Deployment</a>
+    <a href="#cli">CLI Reference</a>
+    <a href="#api">API Reference</a>
+  </nav>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+<h1>Documentation</h1>
+
+<!-- OVERVIEW -->
+<h2 id="overview">Overview</h2>
+<p>
+  ANANSE is an autonomous security operations platform. It combines a command-and-control (C2) server,
+  cross-platform implants, and an AI agent interface into a unified system for red-team and blue-team operations.
+</p>
+<p>
+  The platform is built in two layers: a <strong>TypeScript control plane</strong> (the C2 server, CLI, and AI agent)
+  and a <strong>Go implant layer</strong> that runs on target systems. The AI agent orchestrates operations through
+  natural language — describe your objective and Ananse plans, executes, and reports.
+</p>
+
+<div class="note">
+  <strong>Licensing:</strong> ANANSE uses Ed25519-signed licence keys with offline verification.
+  No telemetry or phone-home required. See <a href="index.html#pricing">pricing</a>.
+</div>
+
+<!-- ARCHITECTURE -->
+<h2 id="architecture">Architecture</h2>
+<p>
+  The system has three main components:
+</p>
+<ul>
+  <li><strong>C2 Server</strong> — HTTP/WebSocket command-and-control server that manages implants, tasks, and results. Built with Express on Node.js.</li>
+  <li><strong>Implant</strong> — Go-based agent deployed on target systems. Communicates via beaconing, executes tasks, and exfiltrates results.</li>
+  <li><strong>AI Agent</strong> — Natural-language interface that translates user objectives into C2 operations. Supports multiple LLM providers.</li>
+</ul>
+
+<h3>Data Flow</h3>
+<pre><code>User → AI Agent → C2 Server API → Task Queue
+                                      ↓
+Target ← Implant (beacon) ←── Task delivery
+  ↓
+Implant executes task, stores result
+  ↓
+Next beacon → Result upload → Server stores
+  ↓
+AI Agent reads result → Reports to user</code></pre>
+
+<!-- C2 PLATFORM -->
+<h2 id="c2">C2 Platform</h2>
+
+<h3>Server</h3>
+<p>
+  The C2 server exposes a REST API and optional WebSocket endpoint. Implants authenticate via bearer tokens
+  and communicate through periodic beacons. The server maintains a task queue for each implant and stores
+  completed results.
+</p>
+<p>Start the server:</p>
+<pre><code>ananse c2-server --port 8443</code></pre>
+
+<h3>Task Model</h3>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td><code>taskId</code></td><td>Unique identifier (ULID)</td></tr>
+  <tr><td><code>type</code></td><td>Task type string, e.g. <code>recon_all</code>, <code>credential_browsers</code></td></tr>
+  <tr><td><code>params</code></td><td>Optional JSON parameters (varies by module)</td></tr>
+  <tr><td><code>status</code></td><td><code>pending</code> → <code>delivered</code> → <code>completed</code> / <code>failed</code></td></tr>
+  <tr><td><code>result</code></td><td>Output data, error message, and optional AI analysis</td></tr>
+</table>
+
+<h3>CLI Operations</h3>
+<pre><code># List implants
+ananse c2 reach
+
+# Create a task and wait for result
+ananse c2 task run &lt;implant-id&gt; recon_all
+
+# List tasks for an implant
+ananse c2 task list &lt;implant-id&gt;
+
+# Get task result
+ananse c2 task result &lt;task-id&gt;
+
+# Self-destruct an implant
+ananse c2 kill &lt;implant-id&gt;</code></pre>
+
+<!-- IMPLANT -->
+<h2 id="implant">Implant</h2>
+<p>
+  The Go implant is a lightweight, cross-platform agent that runs on Linux, Windows, and macOS targets.
+  It communicates with the C2 server through configurable transport protocols, executes modules on demand,
+  and maintains stealth through profiling and memory masking.
+</p>
+
+<h3>Build</h3>
+<pre><code>cd src/c2/implant
+
+# Cross-compile for all targets
+GOOS=linux GOARCH=amd64 go build -o implant-linux .
+GOOS=windows GOARCH=amd64 go build -o implant-windows.exe .
+GOOS=darwin GOARCH=amd64 go build -o implant-darwin .</code></pre>
+
+<h3>Flags</h3>
+<table>
+  <tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>--server</code></td><td><code>http://localhost:8443</code></td><td>C2 server URL</td></tr>
+  <tr><td><code>--token</code></td><td><em>required</em></td><td>Implant authentication token</td></tr>
+  <tr><td><code>--interval</code></td><td><code>60000</code> (1 min)</td><td>Base beacon interval in ms</td></tr>
+  <tr><td><code>--proxy</code></td><td>—</td><td>SOCKS5 proxy address (e.g. <code>socks5://127.0.0.1:9050</code>)</td></tr>
+  <tr><td><code>--ws</code></td><td>—</td><td>Enable WebSocket transport fallback</td></tr>
+  <tr><td><code>--dns-domain</code></td><td>—</td><td>DNS C2 domain for DNS transport fallback</td></tr>
+  <tr><td><code>--front</code></td><td>—</td><td>Domain front CDN URL</td></tr>
+  <tr><td><code>--front-host</code></td><td>—</td><td>Domain front real C2 Host header</td></tr>
+  <tr><td><code>--no-sleep-mask</code></td><td>—</td><td>Disable in-memory encryption during sleep</td></tr>
+  <tr><td><code>--no-persist</code></td><td>—</td><td>Skip watchdog persistence install</td></tr>
+  <tr><td><code>--no-obfuscate</code></td><td>—</td><td>Disable command obfuscation</td></tr>
+</table>
+
+<h3>Beacon Loop</h3>
+<ol>
+  <li>Profiler runs — collects system metadata, checks for VMs/sandboxes, assesses threat level</li>
+  <li>Heartbeat sent via transport chain — includes profile, pending results, system status</li>
+  <li>Server responds with tasks to execute, acknowledgements, and config updates</li>
+  <li>Tasks executed asynchronously with stealth delays between them</li>
+  <li>Pending results attached to next heartbeat</li>
+  <li>Sleep mask encrypts sensitive data in memory during idle period</li>
+  <li>Beacon interval adjusted dynamically based on threat level</li>
+</ol>
+
+<!-- MODULES -->
+<h2 id="modules">Modules</h2>
+<p>
+  Modules are the operational capabilities the implant executes. Each module is a Go function following the
+  signature <code>func(map[string]interface{}) (string, error)</code>. Platform-specific implementations
+  are selected at compile time using Go build constraints.
+</p>
+
+<h3>Reconnaissance</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>recon_processes</code></td><td>List running processes with PID, name, CPU, memory</td></tr>
+  <tr><td><code>recon_network</code></td><td>Active connections, listening ports, routing table</td></tr>
+  <tr><td><code>recon_users</code></td><td>Logged-in users, last log history</td></tr>
+  <tr><td><code>recon_cron</code></td><td>Cron jobs for all users, systemd timers</td></tr>
+  <tr><td><code>recon_suid</code></td><td>SUID/SGID binaries (CVEs: dirtypipe, pwnkit, etc.)</td></tr>
+  <tr><td><code>recon_all</code></td><td>All recon probes combined</td></tr>
+</table>
+
+<h3>Privilege Escalation</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>privesc_sudo</code></td><td>Sudo misconfiguration scanning (DEAD, NOPASSWD, wildcards)</td></tr>
+  <tr><td><code>privesc_writable</code></td><td>Writable scripts, bins, and service files</td></tr>
+  <tr><td><code>privesc_kernel</code></td><td>Kernel vulnerability matching against NVD</td></tr>
+  <tr><td><code>privesc_all</code></td><td>All privesc checks combined</td></tr>
+</table>
+
+<h3>Credential Dumping</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>credential_shadow</code></td><td>Read /etc/shadow (Linux), SAM (Windows), master.passwd (macOS)</td></tr>
+  <tr><td><code>credential_browsers</code></td><td>Extract Chrome/Firefox saved credentials</td></tr>
+  <tr><td><code>credential_ssh_keys</code></td><td>Discover SSH private keys and authorized_keys</td></tr>
+  <tr><td><code>credential_configs</code></td><td>Scan for DB credentials in config files (.env, wp-config, etc.)</td></tr>
+  <tr><td><code>credential_all</code></td><td>All credential dumping probes</td></tr>
+</table>
+
+<h3>Collection</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>collect_keylog</code></td><td>Capture keystrokes (duration param, seconds)</td></tr>
+  <tr><td><code>collect_screenshot</code></td><td>Capture screen (ImageMagick/screencapture)</td></tr>
+  <tr><td><code>collect_clipboard</code></td><td>Read clipboard content</td></tr>
+  <tr><td><code>collect_all</code></td><td>All collection probes</td></tr>
+</table>
+
+<h3>Lateral Movement</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>lateral_ssh</code></td><td>SSH jump to another host using discovered creds/keys</td></tr>
+  <tr><td><code>lateral_all</code></td><td>All lateral movement probes</td></tr>
+</table>
+<p>Params: <code>target</code>, <code>user</code>, <code>keyPath</code>, <code>password</code>, <code>command</code></p>
+
+<h3>Persistence</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>persistence_ssh</code></td><td>Install SSH authorized_key backdoor</td></tr>
+  <tr><td><code>persistence_startup</code></td><td>Add systemd service / LaunchAgent / Run key</td></tr>
+  <tr><td><code>persistence_all</code></td><td>All persistence mechanisms</td></tr>
+</table>
+
+<h3>Exploit</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>exploit_packages</code></td><td>Check installed package versions against CVE database</td></tr>
+  <tr><td><code>exploit_services</code></td><td>Check running services for known vulnerabilities</td></tr>
+  <tr><td><code>exploit_all</code></td><td>All exploit probes</td></tr>
+</table>
+
+<h3>Monitor</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>monitor_fim</code></td><td>File integrity monitoring of sensitive paths</td></tr>
+  <tr><td><code>monitor_rootkit</code></td><td>Rootkit detection via kernel module and syscall hook checks</td></tr>
+  <tr><td><code>monitor_all</code></td><td>All monitoring probes</td></tr>
+</table>
+
+<h3>Brute Force</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>brute_sudo</code></td><td>Brute-force sudo password with common passwords</td></tr>
+  <tr><td><code>brute_ssh</code></td><td>SSH password brute-force against remote host</td></tr>
+  <tr><td><code>brute_local</code></td><td>Local user password cracking via shadow</td></tr>
+  <tr><td><code>brute_all</code></td><td>All brute force probes</td></tr>
+</table>
+
+<h3>Bypass (Windows only)</h3>
+<table>
+  <tr><th>Type</th><th>Description</th></tr>
+  <tr><td><code>bypass_amsi</code></td><td>Patch AMSI to always return AMSI_RESULT_CLEAN</td></tr>
+  <tr><td><code>bypass_etw</code></td><td>Disable ETW event logging</td></tr>
+  <tr><td><code>bypass_all</code></td><td>All bypass techniques</td></tr>
+</table>
+
+<!-- TRANSPORT -->
+<h2 id="transport">Multi-Protocol Transport</h2>
+<p>
+  Implants use a configurable transport chain with automatic fallback. Transports are tried in order;
+  after 3 consecutive failures, the next transport is attempted. On any success, the chain rotates back
+  toward the primary transport.
+</p>
+
+<h3>HTTP (Primary)</h3>
+<p>
+  Standard HTTPS POST to <code>/api/v1/beacon</code>. Supports optional SOCKS5 proxy for routing
+  through Tor or other proxies.
+</p>
+
+<h3>WebSocket</h3>
+<p>
+  Persistent connection to <code>/api/v1/implant/ws</code>. Authentication via JSON auth frame on connect.
+  More efficient for high-frequency beaconing.
+</p>
+
+<h3>DNS</h3>
+<p>
+  Encodes heartbeat as base32 subdomain queries to a configured DNS domain. Server responds via TXT records.
+  Useful for air-gapped or heavily monitored environments where HTTP is blocked.
+</p>
+
+<h3>Domain Fronting</h3>
+<p>
+  Wraps HTTPS transport with a CDN front — resolves to the CDN edge but sets the Host header to the real
+  C2 domain. TLS SNI is set to the CDN hostname.
+</p>
+
+<!-- STEALTH -->
+<h2 id="stealth">Stealth &amp; Evasion</h2>
+
+<h3>Profiler</h3>
+<p>
+  The profiler runs in phases at startup and periodically during the beacon loop:
+</p>
+<ol>
+  <li><strong>Quick check</strong> — immediate sandbox/EDR detection before first beacon</li>
+  <li><strong>Phase 2</strong> — system metadata (hostname, OS, kernel, uptime, CPU, memory, disk)</li>
+  <li><strong>Phase 3</strong> — security tools, debuggers, network connections, listening ports</li>
+  <li><strong>Phase 4</strong> — VM/sandbox detection via DMI, MAC vendor, CPU count, disk size, battery</li>
+</ol>
+
+<h3>Threat Scoring</h3>
+<ul>
+  <li><strong>+5</strong> per security tool detected (Wireshark, Burp, IDA, etc.)</li>
+  <li><strong>+5</strong> per debugger detected (strace, gdb, ltrace, dtrace)</li>
+  <li><strong>+10</strong> if multiple EDR/AV processes running</li>
+  <li><strong>+5</strong> VM detected (DMI product name, MAC vendor prefix)</li>
+  <li><strong>+15</strong> sandbox detected (low CPU, low disk, no battery)</li>
+  <li><strong>+5</strong> firewall/auditd enabled</li>
+</ul>
+
+<p>Threat levels: <code>low</code> (0–9), <code>medium</code> (10–19), <code>high</code> (20–29), <code>critical</code> (30+)</p>
+
+<h3>Sleep Mask</h3>
+<p>
+  AES-128-GCM in-memory encryption of sensitive data (token, implant ID, pending results) during idle
+  periods between beacons. Plaintext buffers are zeroed after encryption. Enabled by default, disabled
+  with <code>--no-sleep-mask</code>.
+</p>
+
+<h3>Adaptive Behavior</h3>
+<ul>
+  <li>Command obfuscation enabled at medium threat and above</li>
+  <li>Beacon interval increases with threat level (jitter and delay between ops)</li>
+  <li>Extra delay before first beacon if sandbox/EDR detected</li>
+</ul>
+
+<!-- DEPLOYMENT -->
+<h2 id="deployment">Deployment</h2>
+
+<h3>Staged Payload</h3>
+<p>
+  The stager is a minimal Go binary that fetches the full implant from the C2 server and executes it in memory.
+  This reduces the initial download size and allows the server to rotate payloads.
+</p>
+<pre><code># Build the stager
+cd src/c2/implant/stager && go build -o stager-linux .
+
+# Deploy with the CLI
+ananse c2 deploy user@target</code></pre>
+
+<h3>Watchdog Persistence</h3>
+<p>
+  The implant installs watchdog persistence on first run (unless <code>--no-persist</code>):
+</p>
+<ul>
+  <li><strong>Linux:</strong> systemd user service or cron @reboot</li>
+  <li><strong>Windows:</strong> Registry Run key or scheduled task</li>
+  <li><strong>macOS:</strong> LaunchAgent plist</li>
+</ul>
+
+<h3>Self-Destruct</h3>
+<p>
+  The <code>c2 kill</code> command queues a self-destruct task. On receipt, the implant:
+</p>
+<ol>
+  <li>Waits briefly for running tasks to finish</li>
+  <li>Removes watchdog persistence</li>
+  <li>Wipes the binary from disk</li>
+  <li>Cleans up implant ID files</li>
+  <li>Exits</li>
+</ol>
+
+<!-- CLI REFERENCE -->
+<h2 id="cli">CLI Reference</h2>
+
+<h3>Global Options</h3>
+<table>
+  <tr><th>Flag</th><th>Description</th></tr>
+  <tr><td><code>-V, --version</code></td><td>Output version number</td></tr>
+  <tr><td><code>-d, --dangerously-skip-permissions</code></td><td>Skip all permission prompts</td></tr>
+</table>
+
+<h3>Modes</h3>
+<table>
+  <tr><th>Command</th><th>Description</th></tr>
+  <tr><td><code>ananse mode</code></td><td>Show current mode</td></tr>
+  <tr><td><code>ananse mode offense</code></td><td>Switch to offense mode (full toolkit)</td></tr>
+  <tr><td><code>ananse mode defense</code></td><td>Switch to defense mode (hardening focus)</td></tr>
+  <tr><td><code>ananse mode normal</code></td><td>Switch to normal mode</td></tr>
+</table>
+
+<h3>C2 Commands</h3>
+<table>
+  <tr><th>Command</th><th>Description</th></tr>
+  <tr><td><code>ananse c2-server --port &lt;n&gt;</code></td><td>Start the C2 server</td></tr>
+  <tr><td><code>ananse c2 reach</code></td><td>List all registered implants</td></tr>
+  <tr><td><code>ananse c2 task list [id]</code></td><td>List tasks (optionally filtered by implant)</td></tr>
+  <tr><td><code>ananse c2 task run &lt;id&gt; &lt;type&gt;</code></td><td>Create task and wait for result</td></tr>
+  <tr><td><code>ananse c2 task cancel &lt;id&gt;</code></td><td>Cancel pending task</td></tr>
+  <tr><td><code>ananse c2 task result &lt;id&gt;</code></td><td>View task result</td></tr>
+  <tr><td><code>ananse c2 kill &lt;id&gt;</code></td><td>Send self-destruct to implant</td></tr>
+  <tr><td><code>ananse c2 deploy &lt;user@host&gt;</code></td><td>Build stager, deploy, wait for beacon</td></tr>
+  <tr><td><code>ananse c2 watch</code></td><td>Live-stream implant events via WebSocket</td></tr>
+</table>
+
+<h3>Other Commands</h3>
+<table>
+  <tr><th>Command</th><th>Description</th></tr>
+  <tr><td><code>ananse attack &lt;target&gt;</code></td><td>Run offense mode against a target</td></tr>
+  <tr><td><code>ananse defend &lt;target&gt;</code></td><td>Run defense mode against a target</td></tr>
+  <tr><td><code>ananse guard &lt;target&gt;</code></td><td>Persistent monitoring of remote target</td></tr>
+  <tr><td><code>ananse probe &lt;target&gt;</code></td><td>Scan for security vulnerabilities</td></tr>
+  <tr><td><code>ananse build &lt;command&gt;</code></td><td>Run build with automatic error fixing</td></tr>
+  <tr><td><code>ananse review</code></td><td>AI code review for staged/unstaged changes</td></tr>
+  <tr><td><code>ananse explain &lt;file&gt;</code></td><td>Explain code using AI</td></tr>
+</table>
+
+<!-- API REFERENCE -->
+<h2 id="api">API Reference</h2>
+<p>
+  The C2 server exposes a REST API. All endpoints return JSON and require authentication via the
+  <code>Authorization: Bearer &lt;token&gt;</code> header (for server-side API key) or the implant token.
+</p>
+
+<h3>Endpoints</h3>
+
+<h4>List Implants</h4>
+<pre><code>GET /api/v1/reach
+Authorization: Bearer &lt;api-key&gt;
+
+→ { "total": 5, "active": 1, "dead": 4, "implants": [...] }</code></pre>
+
+<h4>Create Task</h4>
+<pre><code>POST /api/v1/implant/:id/task
+Authorization: Bearer &lt;api-key&gt;
+{ "type": "recon_all", "params": {} }
+
+→ { "taskId": "...", "type": "recon_all", "status": "pending", "createdAt": "..." }</code></pre>
+
+<h4>List Tasks</h4>
+<pre><code>GET /api/v1/implant/:id/tasks
+Authorization: Bearer &lt;api-key&gt;
+
+→ [{ "taskId": "...", "type": "...", "status": "...", "createdAt": "..." }]</code></pre>
+
+<h4>Task Detail</h4>
+<pre><code>GET /api/v1/task/:taskId
+Authorization: Bearer &lt;api-key&gt;
+
+→ { "taskId": "...", "implantId": "...", "type": "...",
+    "status": "...", "params": {}, "result": { "success": true, "data": "..." },
+    "createdAt": "...", "deliveredAt": "...", "completedAt": "..." }</code></pre>
+
+<h4>Cancel Task</h4>
+<pre><code>DELETE /api/v1/task/:taskId
+Authorization: Bearer &lt;api-key&gt;
+
+→ { "ok": true }</code></pre>
+
+<h4>Implant Beacon</h4>
+<pre><code>POST /api/v1/beacon
+Authorization: Bearer &lt;implant-token&gt;
+{ "implantId": "...", "status": "active", ... }
+
+→ { "command": "", "tasks": [...], "ackedResults": [...], "config": {} }</code></pre>
+
+<h4>WebSocket</h4>
+<pre><code>WS /api/v1/implant/ws
+→ JSON auth frame → JSON beacon/responses</code></pre>
+
+<!-- FOOTER -->
+<div style="margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--border-light); font-size: 0.8rem; color: var(--text-dim);">
+  <p>ANANSE — Advanced Neural Agent for Network Security Exploitation &nbsp;·&nbsp; &copy; 2026</p>
+  <p style="margin-top:0.25rem;"><a href="index.html" style="color: var(--text-secondary); text-decoration: none;">Home</a> &nbsp;·&nbsp; <a href="index.html#pricing" style="color: var(--text-secondary); text-decoration: none;">Pricing</a></p>
+</div>
+
+</div>
+
+<script>
+// Active sidebar highlighting based on scroll
+const observer = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) {
+      document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
+      const id = entry.target.getAttribute('id');
+      document.querySelector(`.sidebar nav a[href="#${id}"]`)?.classList.add('active');
+    }
+  }
+}, { rootMargin: '-20% 0px -60% 0px' });
+
+document.querySelectorAll('h2[id]').forEach(h => observer.observe(h));
+</script>
+
+</body>
+</html>

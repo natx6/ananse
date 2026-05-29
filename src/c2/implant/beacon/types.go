@@ -38,15 +38,23 @@ type TargetProfile struct {
 	Shell           string `json:"shell,omitempty"`
 
 	// Defense detection
-	Firewall   string   `json:"firewall,omitempty"`
-	SELinux    bool     `json:"selinux,omitempty"`
-	AppArmor   bool     `json:"apparmor,omitempty"`
-	HasAgent   bool     `json:"hasAgent,omitempty"`
-	AgentPids  []int    `json:"agentPids,omitempty"`
-	Sudo       bool     `json:"sudo,omitempty"`
-	SudoVersion string  `json:"sudoVersion,omitempty"`
-	ThreatLevel string  `json:"threatLevel,omitempty"`
-	Hints      []string `json:"hints,omitempty"`
+	Firewall     string   `json:"firewall,omitempty"`
+	SELinux      bool     `json:"selinux,omitempty"`
+	AppArmor     bool     `json:"apparmor,omitempty"`
+	HasAgent     bool     `json:"hasAgent,omitempty"`
+	AgentPids    []int    `json:"agentPids,omitempty"`
+	Sudo         bool     `json:"sudo,omitempty"`
+	SudoVersion  string   `json:"sudoVersion,omitempty"`
+	ThreatLevel  string   `json:"threatLevel,omitempty"`
+	Hints        []string `json:"hints,omitempty"`
+
+	// VM/sandbox detection
+	IsVM         bool     `json:"isVM,omitempty"`
+	VMVendor     string   `json:"vmVendor,omitempty"`
+	IsSandbox    bool     `json:"isSandbox,omitempty"`
+	CPUCount     int      `json:"cpuCount,omitempty"`
+	DiskSizeGB   int64    `json:"diskSizeGB,omitempty"`
+	HasBattery   bool     `json:"hasBattery,omitempty"`
 }
 
 // ImplantConfig sent from server to configure beacon behaviour.

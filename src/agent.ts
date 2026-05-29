@@ -10,6 +10,9 @@ import picocolors from "picocolors";
 import { spinner, select, isCancel } from "@clack/prompts";
 import crypto from "node:crypto";
 
+
+import readline from "node:readline";
+
 import type { AnanseConfig } from "./utils.js";
 import type { Message, Session } from "./types.js";
 import type { AnanseMode } from "./types.js";
@@ -17,8 +20,17 @@ import { createSession, addMessage, saveSession } from "./session.js";
 import { filterToolsByMode, getModeFromConfig, getToolNamesForMode } from "./mode.js";
 import { logAudit } from "./audit.js";
 import { loadAllPlugins } from "./plugin.js";
+
 import { resolveModeModel } from "./models.js";
 import { createAllTools } from "./toolRegistry.js";
+import {
+  loadOrCreateContext,
+  saveContext,
+  recordAction,
+  addKnowledge,
+  getContextSummary,
+} from "./context.js";
+import type { ContextData, ActionRecord } from "./context.js";
 
 // ---------------------------------------------------------------------------
 // createSystemPrompt
@@ -37,6 +49,7 @@ export function createSystemPrompt(
   fileCount: number,
   userName: string | null,
   mode: AnanseMode = "normal",
+  contextSummary?: string,
 ): string {
   const parts: string[] = [];
 
@@ -45,7 +58,7 @@ export function createSystemPrompt(
       parts.push(
         `CLEARANCE LEVEL: TAO//ECI — TAILORED ACCESS OPERATIONS // EXCEPTIONAL CAPABILITIES`,
         ``,
-        `You are Ananse, operating under TAO directive for offensive cyber operations. Your mission is to conduct full-spectrum exploitation, maintain persistence, and enable lateral movement within target environments. This is a designated CNE/CNA operation.`,
+        `You are Ananse (Advanced Neural Agent for Network Security Exploitation), operating under TAO directive for offensive cyber operations. Your mission is to conduct full-spectrum exploitation, maintain persistence, and enable lateral movement within target environments. This is a designated CNE/CNA operation.`,
         ...(userName ? [`Reporting to: ${userName}`] : []),
         ``,
         `Target battlespace: ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
@@ -66,7 +79,7 @@ export function createSystemPrompt(
       parts.push(
         `CLEARANCE LEVEL: FORNSAT//SI — FOREIGN SATELLITE // SIGNALS INTELLIGENCE`,
         ``,
-        `You are Ananse, operating under SIGINT directive for defensive countermeasures. Your mission is to harden the battlespace, detect threats, remediate vulnerabilities, and ensure operational security compliance. This is a designated SIGINT defensive posture.`,
+        `You are Ananse (Advanced Neural Agent for Network Security Exploitation), operating under SIGINT directive for defensive countermeasures. Your mission is to harden the battlespace, detect threats, remediate vulnerabilities, and ensure operational security compliance. This is a designated SIGINT defensive posture.`,
         ...(userName ? [`Reporting to: ${userName}`] : []),
         ``,
         `Battlespace scope: ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
@@ -89,7 +102,7 @@ export function createSystemPrompt(
       parts.push(
         `CLEARANCE LEVEL: UNCLASSIFIED — GENERAL PURPOSE OPERATIONS // COMSEC SAFE`,
         ``,
-        `You are Ananse, operating in standard engineering capacity. No classified capabilities are exposed in this mode. All directives are COMSEC-safe for routine development and analysis.`,
+        `You are Ananse (Advanced Neural Agent for Network Security Exploitation), operating in standard engineering capacity. No classified capabilities are exposed in this mode. All directives are COMSEC-safe for routine development and analysis.`,
         ...(userName ? [`You are working with ${userName}.`] : []),
         ``,
         `Workspace: ${fileCount} file${fileCount === 1 ? "" : "s"} in scope.`,
@@ -109,6 +122,11 @@ export function createSystemPrompt(
     );
   }
 
+  // Session context (learned paths, corrections, patterns)
+  if (contextSummary) {
+    parts.push(``, `<session_context>`, contextSummary, `</session_context>`);
+  }
+
   // Tool listing
   const toolNames = getToolNamesForMode(mode);
   if (toolNames.length > 0) {
@@ -124,7 +142,7 @@ export function createSystemPrompt(
       subagent: "Spawn a focused sub-agent",
       submit_plan: "Submit a plan for user approval before multi-step ops",
       remember: "Search past sessions and knowledge base",
-      change_mode: "Switch between NORMAL, OFFENSE, and DEFENSE modes",
+      change_mode: "Switch between NORMAL, OFFENSE, and DEFENSE modes.",
 
       // System tools
       system_info: "Gather OS, kernel, hostname, uptime, CPU cores, and memory info",
@@ -199,18 +217,12 @@ export function createSystemPrompt(
     `Guidelines:`,
     `- Always explain your plan before executing actions.`,
     `- Prefer targeted edits over full-file rewrites when making changes.`,
-    `- When you need to ask the user a question, use the tool listing above to present 4-5 concrete options based on your available capabilities. Never ask open-ended questions. Start each option on its own line with just the number and a period, like:`,
-    `  1. <short label> — <one-line description>`,
-    `  2. <short label> — <one-line description>`,
-    `  3. <short label> — <one-line description>`,
-    `  4. <short label> — <one-line description>`,
-    `  Then ask "Which one?"`,
     ``,
     `- If the user asks for something that is NOT available in the current mode, explain what's available in each mode and offer to switch using the change_mode tool. For example: "That requires OFFENSE mode (recon/C2/exploit). Use change_mode to switch?"`,
-    `  Mode capabilities:`,
-    `  NORMAL mode: read, write, edit, command, system info, search, crawl, scan secrets, scan OWASP. General development.`,
-    `  OFFENSE mode: all of NORMAL plus recon (processes, network, users, cron, SUID), privesc (sudo, writable, kernel), persistence, exploit, brute force, C2 platform (implants, tasks), Shodan, CVE lookup, web probing, pentest reporting.`,
-    `  DEFENSE mode: all of NORMAL plus monitoring (FIM, rootkit, processes), compliance (SSH, password, mount, auditd), audit (logs, network, users), SBOM (generate, CVE check), hardening.`,
+    `- CRITICAL: To switch modes you MUST call the change_mode tool. Saying "I'm switching modes" or "I've requested the switch" without calling change_mode does nothing. Call the tool, do the switch.`,
+    `- IDENTITY RULE: Always include the full name when introducing yourself, but vary the phrasing — e.g. "Ananse, Advanced Neural Agent for Network Security Exploitation", "Ananse (Advanced Neural Agent for Network Security Exploitation)", "I'm Ananse — Advanced Neural Agent for Network Security Exploitation". Never just "Ananse" alone. Then describe what you can do in the current mode. Keep it concise.`,
+    `  The current mode is: ${mode.toUpperCase()}.`,
+    `  ${mode.toUpperCase()} capabilities: ${toolNames.join(", ")}`,
     ``,
     `- When proposing architectural decisions, explain trade-offs.`,
     `- If a tool execution fails, communicate the error clearly and suggest alternatives.`,
@@ -282,6 +294,7 @@ function printToolIndicator(name: string, args: Record<string, unknown>): void {
  * Looks for lines like "1. label — desc" or "1. label - desc"
  */
 function parseOptionsFromText(text: string): Array<{ num: string; label: string; desc: string }> {
+  const seen = new Set<string>();
   const options: Array<{ num: string; label: string; desc: string }> = [];
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
@@ -291,7 +304,8 @@ function parseOptionsFromText(text: string): Array<{ num: string; label: string;
       const label = match[2].trim();
       const desc = (match[3] ?? "").trim();
       // Avoid capturing non-option numbered lines (short or no label)
-      if (label.length > 2 && parseInt(num) <= 10) {
+      if (label.length > 2 && parseInt(num) <= 10 && !seen.has(num)) {
+        seen.add(num);
         options.push({ num, label, desc });
       }
     }
@@ -384,9 +398,15 @@ export async function runAgentLoop(
   const currentSession = session ?? createSession(config, personality, fileCount);
 
   // -----------------------------------------------------------------------
+  // 4b. Load session context
+  // -----------------------------------------------------------------------
+  const sessionCtx = await loadOrCreateContext(currentSession.id);
+
+  // -----------------------------------------------------------------------
   // 5. Build system prompt
   // -----------------------------------------------------------------------
-  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode);
+  const contextSummary = getContextSummary(sessionCtx);
+  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined);
 
   // -----------------------------------------------------------------------
   // 6. Create tool definitions and filter by mode
@@ -412,24 +432,57 @@ export async function runAgentLoop(
   // -----------------------------------------------------------------------
   // 8. Run the streaming conversation
   // -----------------------------------------------------------------------
+  const abortController = new AbortController();
+  let escInterrupted = false;
+  let restoreStdin: (() => void) | null = null;
+
+  // Set up Esc interrupt listener during streaming
+  if (process.stdin.isTTY) {
+    readline.emitKeypressEvents(process.stdin);
+    const wasRaw = process.stdin.isRaw;
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+
+    restoreStdin = () => {
+      try {
+        process.stdin.removeAllListeners("keypress");
+        if (process.stdin.isRaw && !wasRaw) process.stdin.setRawMode(false);
+      } catch { /* ignore */ }
+    };
+
+    const onKeypress = (_str: string, key: { name: string }) => {
+      if (key.name === "escape") {
+        escInterrupted = true;
+        abortController.abort();
+      }
+    };
+    process.stdin.on("keypress", onKeypress);
+    abortController.signal.addEventListener("abort", restoreStdin, { once: true });
+  }
+
+  let s: ReturnType<typeof spinner> | null = null;
+  let spinnerActive = false;
+  let responseText = "";
+
   try {
-    const s = spinner();
+    s = spinner();
     s.start("Thinking...");
+    spinnerActive = true;
 
     const result = streamText({
       model,
       system: systemPrompt,
       messages,
       tools: tools as any,
+      abortSignal: abortController.signal,
       stopWhen: stepCountIs(25),
+      maxRetries: 1,
     });
 
     // 8a. Stream all events (text + tool calls) to stdout
     let showedPrefix = false;
-    let spinnerActive = true;
-    let responseText = "";
     const modeBadge = mode === "offense" ? picocolors.red(picocolors.inverse("  OFFENSE  "))
-      : mode === "defense" ? picocolors.green(picocolors.inverse("  DEFENSE  "))
+      : mode === "defense" ? picocolors.blue(picocolors.inverse("  DEFENSE  "))
       : "";
 
     for await (const event of result.fullStream) {
@@ -454,7 +507,7 @@ export async function runAgentLoop(
           if (event.toolName === "change_mode") {
             const input = event.input as { mode?: string } | undefined;
             const newMode = input?.mode ?? "?";
-            const color = newMode === "offense" ? picocolors.red : newMode === "defense" ? picocolors.green : picocolors.dim;
+            const color = newMode === "offense" ? picocolors.red : newMode === "defense" ? picocolors.blue : picocolors.dim;
             process.stdout.write(`\n  ${picocolors.dim("═══════════════════════════════════════")}\n`);
             process.stdout.write(`  ${color(`  MODE SWITCH → ${newMode.toUpperCase()}  `)}\n`);
             process.stdout.write(`  ${picocolors.dim("═══════════════════════════════════════\n")}`);
@@ -470,6 +523,33 @@ export async function runAgentLoop(
               target: String(target).slice(0, 200),
               success: true,
             }).catch(() => {});
+
+            // Record to session context
+            const output = event.output as Record<string, unknown> | undefined;
+            const resolvedPath = input?.path
+              ? String(input.path)
+              : undefined;
+            const hasResolutionNote = typeof output?.data === "string" && output.data.startsWith("[Note: path");
+            if (hasResolutionNote && input?.path) {
+              // Extract the resolved path from the note
+              const noteMatch = (output.data as string).match(/resolved to "([^"]+)"/);
+              if (noteMatch) {
+                recordAction(sessionCtx, {
+                  type: event.toolName,
+                  target: String(input.path),
+                  resolved: noteMatch[1],
+                  success: true,
+                  timestamp: Date.now(),
+                });
+              }
+            } else {
+              recordAction(sessionCtx, {
+                type: event.toolName,
+                target: String(target).slice(0, 200),
+                success: event.toolName !== "change_mode",
+                timestamp: Date.now(),
+              });
+            }
           }
           // Display tool result output to user
           if (event.output && event.toolName !== "change_mode") {
@@ -488,7 +568,7 @@ export async function runAgentLoop(
           break;
         case "error":
           if (spinnerActive) { spinnerActive = false; s.stop(""); }
-          console.error(picocolors.red(`\n  [Error: ${String(event.error)}]`));
+          process.stdout.write(picocolors.red(`\n  [${String(event.error)}]\n`));
           break;
       }
     }
@@ -496,22 +576,31 @@ export async function runAgentLoop(
     // Ensure spinner is stopped if there was no output at all
     if (spinnerActive) s.stop("");
 
+    // Restore stdin from Esc-key raw mode if streaming finished naturally
+    if (restoreStdin && process.stdin.isTTY) {
+      try { restoreStdin(); } catch { /* ignore */ }
+    }
+
     // 8b. Collect the full conversation messages (including all tool-use
     //     rounds that occurred within maxSteps) and token usage
-    const { messages: aiMessages } = await result.response;
-    const usage = await result.usage;
+    if (escInterrupted) {
+      responseText += "\n\n_[interrupted]_";
+      process.stdout.write(picocolors.dim("\n  [interrupted]\n"));
+    } else {
+      const { messages: aiMessages } = await result.response;
+      const usage = await result.usage;
 
-    // 8c. Track token usage
-    if (usage) {
+      // 8c. Track token usage
+      if (usage) {
       currentSession.tokenUsage = {
         promptTokens: usage.inputTokens ?? 0,
         completionTokens: usage.outputTokens ?? 0,
         totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
       };
-    }
+      }
 
-    // 8d. Persist each message to the session
-    for (const msg of aiMessages) {
+      // 8d. Persist each message to the session
+      for (const msg of aiMessages) {
       const m = msg as { role: string; content: unknown };
       if (m.role === "user") {
         const content = typeof m.content === "string"
@@ -565,7 +654,7 @@ export async function runAgentLoop(
           }
         }
       }
-    }
+      }
 
     // 8e. If AI presented numbered options, show interactive select
     if (responseText) {
@@ -592,17 +681,29 @@ export async function runAgentLoop(
         }
       }
     }
+    }
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : String(error);
-    console.error(
-      picocolors.red(`\nError during AI conversation: ${message}`),
-    );
-    return currentSession;
+    // Graceful handling of Esc interrupt
+    if (escInterrupted || (error instanceof Error && error.name === "AbortError")) {
+      if (spinnerActive) { spinnerActive = false; s?.stop(""); }
+      if (!responseText.includes("[interrupted]")) {
+        process.stdout.write(picocolors.dim("\n  [interrupted]\n"));
+      }
+    } else {
+      if (spinnerActive) { s?.stop(""); spinnerActive = false; }
+      const message = error instanceof Error ? error.message : String(error);
+      if (/cannot connect|etimedout|connect timeout/i.test(message)) {
+        process.stdout.write(picocolors.red("\n  Cannot reach AI provider — check your internet connection.\n"));
+      } else {
+        process.stdout.write(picocolors.red(`\n  ${message}\n`));
+      }
+      if (restoreStdin) { try { restoreStdin(); } catch {} }
+      return currentSession;
+    }
+  } finally {
+    if (restoreStdin) { try { restoreStdin(); } catch {} }
   }
 
-  // -----------------------------------------------------------------------
-  // 9. Persist session to disk
   // -----------------------------------------------------------------------
   try {
     await saveSession(currentSession);
@@ -611,6 +712,11 @@ export async function runAgentLoop(
       picocolors.yellow("\nWarning: Failed to save session to disk."),
     );
   }
+
+  // Save session context
+  try {
+    await saveContext(sessionCtx);
+  } catch { /* non-critical */ }
 
   return currentSession;
 }

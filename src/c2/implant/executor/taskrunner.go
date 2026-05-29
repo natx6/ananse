@@ -65,6 +65,27 @@ func (r *TaskRunner) registerDefaults() {
 		"brute_ssh":            module.RunBruteSSH,
 		"brute_local":          module.RunBruteLocal,
 		"brute_all":            module.RunBruteAll,
+			// Credential dumping
+		"credential_shadow":     module.RunCredentialShadow,
+		"credential_browsers":   module.RunCredentialBrowsers,
+		"credential_ssh_keys":   module.RunCredentialSSHKeys,
+		"credential_configs":    module.RunCredentialConfigs,
+		"credential_all":        module.RunCredentialAll,
+
+		// Lateral movement
+		"lateral_ssh":           module.RunLateralSSH,
+		"lateral_all":           module.RunLateralAll,
+
+		// Collection (keylogging, screenshot, clipboard)
+		"collect_keylog":        module.RunCollectKeylog,
+		"collect_screenshot":    module.RunCollectScreenshot,
+		"collect_clipboard":     module.RunCollectClipboard,
+		"collect_all":           module.RunCollectAll,
+
+		// Bypass (Windows-only — will compile to no-op stub on other platforms)
+		"bypass_amsi":           module.RunBypassAmsi,
+		"bypass_etw":            module.RunBypassEtw,
+		"bypass_all":            module.RunBypassAll,
 	}
 }
 
