@@ -198,10 +198,11 @@ export function createSearchTool() {
         if (files.length > 0) {
           return { success: true, data: files.join("\n") };
         }
-        // No results — if the pattern looks like a path (no glob wildcards),
-        // try to resolve it as a user-provided path
-        if (!pattern.includes("*") && !pattern.includes("?") && !pattern.includes("[")) {
-          const resolved = await resolveUserPath(pattern);
+        // No results — try to resolve as a user-provided path
+        // Strip common glob wildcards and try
+        const cleanPattern = pattern.replace(/[*?[\]!]+/g, "").trim();
+        if (cleanPattern && cleanPattern.length > 1) {
+          const resolved = await resolveUserPath(cleanPattern);
           if (resolved) {
             const label = resolved.type === "dir" ? "Directory" : "File";
             return {
