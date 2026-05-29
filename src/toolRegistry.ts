@@ -45,6 +45,9 @@ import { createComplianceSshTool, createCompliancePasswordTool, createCompliance
 import { createAuditLogsTool, createAuditNetworkTool, createAuditUsersTool } from "./defense/audit.js";
 import { createSbomGenerateTool, createSbomCveCheckTool } from "./defense/sbom.js";
 
+// SSH tools
+import { createSshConnectTool, createSshDisconnectTool, createSshStatusTool } from "./ssh.js";
+
 import type { AnanseConfig } from "./utils.js";
 
 type ToolFactory = () => ReturnType<typeof createReadTool>;
@@ -124,6 +127,11 @@ const toolEntries: ToolEntry[] = [
   { name: "audit_users", factory: createAuditUsersTool as ToolFactory },
   { name: "sbom_generate", factory: createSbomGenerateTool as ToolFactory },
   { name: "sbom_cve_check", factory: createSbomCveCheckTool as ToolFactory },
+
+  // SSH (all modes)
+  { name: "ssh_connect", factory: createSshConnectTool as ToolFactory },
+  { name: "ssh_disconnect", factory: createSshDisconnectTool as ToolFactory },
+  { name: "ssh_status", factory: createSshStatusTool as ToolFactory },
 ];
 
 export function createAllTools(config: AnanseConfig): Record<string, unknown> {

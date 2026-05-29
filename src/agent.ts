@@ -149,6 +149,11 @@ export function createSystemPrompt(
       disk_usage: "Show disk usage by mount point",
       network_info: "Show network interfaces, IPs, routing table, and DNS resolvers",
 
+      // SSH
+      ssh_connect: "Connect to a remote host via SSH — all commands run remotely after",
+      ssh_disconnect: "Close the active SSH connection and restore local execution",
+      ssh_status: "Check SSH connection status (connected to which host, uptime)",
+
       // Scanners
       scan_secrets: "Scan for hardcoded secrets and API keys",
       scan_owasp: "Scan for OWASP Top 10 vulnerability patterns",

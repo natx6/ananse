@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import fastGlob from "fast-glob";
 import { requestPermission } from "./permission.js";
 import { resolveUserPath } from "./pathResolver.js";
+import { getRemoteExec } from "./execContext.js";
 import { crawlDependencies, crawlDirectory, computeReverseDeps } from "./cobweb.js";
 import { detectAndCondense } from "./diagnose.js";
 import type { ToolResult } from "./types.js";
@@ -143,11 +144,23 @@ export function createCommandTool(
         return { success: false, data: "", error: "Operation cancelled by user" };
       }
 
-      // Route through exec override if provided (e.g., SSH)
+      // Route through exec override if provided (e.g., SSH from attack/defend commands)
       if (execOverride) {
         try {
           const result = await execOverride(command, timeout ?? MAX_TIMEOUT_MS);
           const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+          return { success: true, data: output || "(no output)" };
+        } catch (err) {
+          return { success: false, data: "", error: (err as Error).message };
+        }
+      }
+
+      // Route through active SSH session if connected
+      const remoteFn = getRemoteExec();
+      if (remoteFn) {
+        try {
+          const result = await remoteFn(command, timeout ?? MAX_TIMEOUT_MS);
+          const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
           return { success: true, data: output || "(no output)" };
         } catch (err) {
           return { success: false, data: "", error: (err as Error).message };

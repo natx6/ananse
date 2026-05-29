@@ -20,6 +20,7 @@ import { loadPolicy } from "./policy.js";
 import { listPlugins } from "./plugin.js";
 import { initKnowledge } from "./knowledge.js";
 import { runAgentLoop } from "./agent.js";
+import { closeSshSession } from "./ssh.js";
 import { runBuildLoop } from "./builder.js";
 import { runRefactor } from "./refactor.js";
 import { weaveTypes, weaveDocs } from "./weave.js";
@@ -357,6 +358,7 @@ async function main(): Promise<void> {
           break;
         case "exit":
         case "quit":
+          await closeSshSession().catch(() => {});
           console.log(picocolors.yellow("\nGoodbye."));
           process.exit(0);
           break;
