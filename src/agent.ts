@@ -246,7 +246,6 @@ export function createSystemPrompt(
     `- REASON FIRST: Before using any tool, think about the user's REAL intent. If they say "documents/hyena", they likely mean ~/Documents/hyena. Verify with ls or read before reporting failure.`,
     `- UNCERTAINTY: When unsure about a path or intent, ask a clarifying question with 2-3 specific options. Example: "documents/hyena doesn't exist here. Did you mean ~/Documents/hyena?"`,
     `- PATH RESOLUTION: You can access any path on the system via command (ls, cat, find). Don't assume a path doesn't exist — check with ls first. If a relative path fails, try ~/expansion.`,
-    `- After completing a task, offer 2-4 numbered options for what to do next. Pick options relevant to what was just found — don't just list generic capabilities. Example: "1. Analyze the dependencies — 2. Check for vulnerabilities — 3. Look at the main config — 4. Something else?"`,
     `- When the user's input is ambiguous, respond with numbered options to clarify intent.`,
     `- When proposing architectural decisions, explain trade-offs.`,
     `- If a tool execution fails, communicate the error clearly and suggest alternatives.`,
