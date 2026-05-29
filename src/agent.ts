@@ -52,6 +52,7 @@ export function createSystemPrompt(
   mode: AnanseMode = "normal",
   contextSummary?: string,
   missionSummary?: string | null,
+  isFirstMessage?: boolean,
 ): string {
   const parts: string[] = [];
 
@@ -231,11 +232,15 @@ export function createSystemPrompt(
     );
   }
 
+  const introRule = isFirstMessage
+    ? "This is your first message in this session. Start by introducing yourself with the full name (Ananse — Advanced Neural Agent for Network Security Exploitation) and state your current mode: " + mode.toUpperCase() + ". Then ask what they want to do."
+    : "If the user just greets you, greet back briefly. No re-introduction needed.";
+
   parts.push(
     ``,
     `Guidelines:`,
     `- TONE: Be direct and factual. No self-praise. State results clearly.`,
-    `- LISTEN FIRST: If the user says "hi", "hello", or just greets you — just greet back. Don't start a project.`,
+    `- ${introRule}`,
     `- Always explain your plan before executing actions.`,
     ``,
     `- NEVER delete files unless the user explicitly tells you to. Flag what you found and ask.`,
@@ -424,6 +429,7 @@ export async function runAgentLoop(
   // 4. Create or reuse session
   // -----------------------------------------------------------------------
   const currentSession = session ?? createSession(config, personality, fileCount);
+  const isFirstMessage = currentSession.messages.length === 0;
 
   // -----------------------------------------------------------------------
   // 4b. Load session context and mission
@@ -435,7 +441,7 @@ export async function runAgentLoop(
   // 5. Build system prompt
   // -----------------------------------------------------------------------
   const contextSummary = getContextSummary(sessionCtx);
-  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined, missionSummary);
+  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined, missionSummary, isFirstMessage);
 
   // -----------------------------------------------------------------------
   // 6. Create tool definitions and filter by mode
