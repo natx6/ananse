@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import fastGlob from "fast-glob";
 import { registerTool } from "../mode.js";
 import type { ToolResult } from "../types.js";
+import { resolveUserPath } from "../pathResolver.js";
 
 const SECRET_PATTERNS = [
   { name: "AWS Access Key", pattern: /AKIA[0-9A-Z]{16}/g },
@@ -35,7 +36,11 @@ export function createScanSecretsTool() {
       path: z.string().optional().describe("Directory to scan (default: current directory)"),
     }),
     execute: async ({ path }): Promise<ToolResult> => {
-      const scanPath = path ?? ".";
+      let scanPath = path ?? ".";
+      if (path) {
+        const resolved = await resolveUserPath(path);
+        if (resolved) scanPath = resolved.path;
+      }
       const files = await fastGlob(`${scanPath}/**/*`, {
         ignore: ["node_modules/**", ".git/**", "dist/**", "*.min.js", "*.map"],
         dot: false,
@@ -81,7 +86,11 @@ export function createScanOwaspTool() {
       path: z.string().optional().describe("File or directory to scan (default: current directory)"),
     }),
     execute: async ({ path }): Promise<ToolResult> => {
-      const scanPath = path ?? ".";
+      let scanPath = path ?? ".";
+      if (path) {
+        const resolved = await resolveUserPath(path);
+        if (resolved) scanPath = resolved.path;
+      }
       const files = await fastGlob(`${scanPath}/**/*.{ts,js,jsx,tsx,py,java,go,rs,php}`, {
         ignore: ["node_modules/**", ".git/**", "dist/**"],
         dot: false,

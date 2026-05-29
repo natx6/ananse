@@ -195,8 +195,22 @@ export function createSearchTool() {
           dot: false,
           onlyFiles: true,
         });
-        const data = files.length > 0 ? files.join("\n") : "No files found matching pattern";
-        return { success: true, data };
+        if (files.length > 0) {
+          return { success: true, data: files.join("\n") };
+        }
+        // No results — if the pattern looks like a path (no glob wildcards),
+        // try to resolve it as a user-provided path
+        if (!pattern.includes("*") && !pattern.includes("?") && !pattern.includes("[")) {
+          const resolved = await resolveUserPath(pattern);
+          if (resolved) {
+            const label = resolved.type === "dir" ? "Directory" : "File";
+            return {
+              success: true,
+              data: `${label} found at resolved path: ${resolved.path}${resolved.note ? ` (${resolved.note})` : ""}`,
+            };
+          }
+        }
+        return { success: true, data: "No files found matching pattern" };
       } catch (err: unknown) {
         return { success: false, data: "", error: toErrorMessage(err) };
       }
