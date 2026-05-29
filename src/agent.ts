@@ -435,7 +435,10 @@ export async function runAgentLoop(
   // 4b. Load session context and mission
   // -----------------------------------------------------------------------
   const sessionCtx = await loadOrCreateContext(currentSession.id);
-  const missionSummary = await loadLatestMission().then((m) => m ? getMissionSummary() : null).catch(() => null);
+  // Only load mission if resuming a session — fresh sessions don't inherit old missions
+  const missionSummary = !isFirstMessage
+    ? await loadLatestMission().then((m) => m ? getMissionSummary() : null).catch(() => null)
+    : null;
 
   // -----------------------------------------------------------------------
   // 5. Build system prompt
