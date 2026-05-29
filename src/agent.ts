@@ -31,6 +31,7 @@ import {
   getContextSummary,
 } from "./context.js";
 import type { ContextData, ActionRecord } from "./context.js";
+import { getMissionSummary, loadLatestMission } from "./mission.js";
 
 // ---------------------------------------------------------------------------
 // createSystemPrompt
@@ -50,6 +51,7 @@ export function createSystemPrompt(
   userName: string | null,
   mode: AnanseMode = "normal",
   contextSummary?: string,
+  missionSummary?: string | null,
 ): string {
   const parts: string[] = [];
 
@@ -127,6 +129,11 @@ export function createSystemPrompt(
     parts.push(``, `<session_context>`, contextSummary, `</session_context>`);
   }
 
+  // Active mission
+  if (missionSummary) {
+    parts.push(``, `<mission>`, missionSummary, `</mission>`);
+  }
+
   // Tool listing
   const toolNames = getToolNamesForMode(mode);
   if (toolNames.length > 0) {
@@ -143,6 +150,12 @@ export function createSystemPrompt(
       submit_plan: "Submit a plan for user approval before multi-step ops",
       remember: "Search past sessions and knowledge base",
       change_mode: "Switch between NORMAL, OFFENSE, and DEFENSE modes.",
+
+      // Mission
+      mission_set: "Set a persistent mission goal with steps — progress is tracked across turns",
+      mission_step: "Mark a mission step as complete",
+      mission_status: "Check mission progress and remaining steps",
+      mission_cancel: "Cancel the current mission",
 
       // System tools
       system_info: "Gather OS, kernel, hostname, uptime, CPU cores, and memory info",
@@ -185,6 +198,7 @@ export function createSystemPrompt(
 
       // C2 (offense)
       c2_reach: "List all registered C2 implants — active, dead, destroyed counts and last-seen",
+      c2_deploy: "Build + deploy an implant to an SSH target and wait for beacon",
       c2_task_create: "Create a new task for a C2 implant (recon, privesc, persistence, exploit, monitor)",
       c2_task_list: "List tasks for a C2 implant with status and timestamps",
       c2_task_detail: "Get full details and result output for a specific C2 task",
@@ -408,15 +422,16 @@ export async function runAgentLoop(
   const currentSession = session ?? createSession(config, personality, fileCount);
 
   // -----------------------------------------------------------------------
-  // 4b. Load session context
+  // 4b. Load session context and mission
   // -----------------------------------------------------------------------
   const sessionCtx = await loadOrCreateContext(currentSession.id);
+  const missionSummary = await loadLatestMission().then((m) => m ? getMissionSummary() : null).catch(() => null);
 
   // -----------------------------------------------------------------------
   // 5. Build system prompt
   // -----------------------------------------------------------------------
   const contextSummary = getContextSummary(sessionCtx);
-  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined);
+  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined, missionSummary);
 
   // -----------------------------------------------------------------------
   // 6. Create tool definitions and filter by mode
@@ -574,6 +589,10 @@ export async function runAgentLoop(
             if (output.length > 1) {
               process.stdout.write(`${picocolors.dim(output)}\n\n`);
             }
+          }
+          // Mid-turn checkpoint: save session after each tool call
+          if (currentSession) {
+            saveSession(currentSession).catch(() => {});
           }
           break;
         case "error":

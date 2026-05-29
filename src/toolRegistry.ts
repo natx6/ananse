@@ -37,13 +37,16 @@ import { createCveSearchTool, createCveDetailTool } from "./offense/cve.js";
 import { createReportTool } from "./offense/report.js";
 
 // C2 tools
-import { createC2ReachTool, createC2TaskCreateTool, createC2TaskListTool, createC2TaskDetailTool, createC2TaskCancelTool, createC2KillTool } from "./c2/tools.js";
+import { createC2ReachTool, createC2DeployTool, createC2TaskCreateTool, createC2TaskListTool, createC2TaskDetailTool, createC2TaskCancelTool, createC2KillTool } from "./c2/tools.js";
 
 // Defense tools
 import { createMonitorFimSnapshotTool, createMonitorFimCheckTool, createMonitorRootkitTool, createMonitorProcessesTool } from "./defense/monitor.js";
 import { createComplianceSshTool, createCompliancePasswordTool, createComplianceMountTool, createComplianceAuditdTool } from "./defense/compliance.js";
 import { createAuditLogsTool, createAuditNetworkTool, createAuditUsersTool } from "./defense/audit.js";
 import { createSbomGenerateTool, createSbomCveCheckTool } from "./defense/sbom.js";
+
+// Mission tools
+import { createMissionSetTool, createMissionStepTool, createMissionStatusTool, createMissionCancelTool } from "./mission.js";
 
 // SSH tools
 import { createSshConnectTool, createSshDisconnectTool, createSshStatusTool } from "./ssh.js";
@@ -107,6 +110,7 @@ const toolEntries: ToolEntry[] = [
 
   // C2 (offense)
   { name: "c2_reach", factory: createC2ReachTool as ToolFactory },
+  { name: "c2_deploy", factory: createC2DeployTool as ToolFactory },
   { name: "c2_task_create", factory: createC2TaskCreateTool as ToolFactory },
   { name: "c2_task_list", factory: createC2TaskListTool as ToolFactory },
   { name: "c2_task_detail", factory: createC2TaskDetailTool as ToolFactory },
@@ -127,6 +131,12 @@ const toolEntries: ToolEntry[] = [
   { name: "audit_users", factory: createAuditUsersTool as ToolFactory },
   { name: "sbom_generate", factory: createSbomGenerateTool as ToolFactory },
   { name: "sbom_cve_check", factory: createSbomCveCheckTool as ToolFactory },
+
+  // Mission (all modes)
+  { name: "mission_set", factory: createMissionSetTool as ToolFactory },
+  { name: "mission_step", factory: createMissionStepTool as ToolFactory },
+  { name: "mission_status", factory: createMissionStatusTool as ToolFactory },
+  { name: "mission_cancel", factory: createMissionCancelTool as ToolFactory },
 
   // SSH (all modes)
   { name: "ssh_connect", factory: createSshConnectTool as ToolFactory },
