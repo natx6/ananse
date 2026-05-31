@@ -122,10 +122,10 @@ export function createDashboard() {
 
   // ── Update functions ─────────────────────────────────
   function updateHeader() {
-    const modeColor = currentMode === "OFFENSE" ? "{red-fg}" : currentMode === "DEFENSE" ? "{blue-fg}" : "{white-fg}";
+    const modeTag = currentMode === "OFFENSE" ? "{red-fg}" : currentMode === "DEFENSE" ? "{blue-fg}" : "{white-fg}";
     header.setContent(
-      ` {bold}Ananse{/bold} — ${modeColor}${currentMode}{/modeColor}  |  ` +
-      `Provider: {cyan-fg}OpenRouter{/cyan-fg}  |  ` +
+      ` {bold}Ananse{/} — ${modeTag}${currentMode}{/}  |  ` +
+      `Provider: {cyan-fg}OpenRouter{/}  |  ` +
       `Fleet: ${fleetData ? `${fleetData.active} active / ${fleetData.dead} dead` : "N/A"}`
     );
     screen.render();
