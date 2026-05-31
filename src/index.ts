@@ -272,14 +272,26 @@ async function main(): Promise<void> {
           console.log(picocolors.cyan("\n  Slash commands:"));
           console.log(`  ${picocolors.dim("/help")}       Show this help`);
           console.log(`  ${picocolors.dim("/mode")}     Show or change mode (/mode offense|defense|normal)`);
-          console.log(`  ${picocolors.dim("/model")}     Change AI model (e.g., /model gpt-4o)`);
+          console.log(`  ${picocolors.dim("/model")}     Change AI model (e.g., /model claude-sonnet-4.6)`);
           console.log(`  ${picocolors.dim("/clear")}     Clear conversation history`);
           console.log(`  ${picocolors.dim("/save")}     Save session with a name`);
-          console.log(`  ${picocolors.dim("/status")}   Show session info (msgs, tokens)`);
+          console.log(`  ${picocolors.dim("/status")}   Show session info (msgs, tokens, profile)`);
           console.log(`  ${picocolors.dim("/danger")}   Toggle dangerous mode`);
           console.log(`  ${picocolors.dim("/exit")}     Exit Ananse`);
-          console.log(picocolors.dim("\n  Tip: search sessions with `ananse search <query>`"));
-          console.log(picocolors.dim("  Tip: review changes with `ananse review`\n"));
+          console.log("");
+          console.log(picocolors.cyan("  AI tools (say in chat):"));
+          console.log(`  ${picocolors.dim("profile_set")}  Tell Ananse about yourself (persistent)`);
+          console.log(`  ${picocolors.dim("profile_get")}  View your saved profile`);
+          console.log(`  ${picocolors.dim("mission_set")}  Set a persistent goal with steps`);
+          console.log(`  ${picocolors.dim("mission_status")} Check mission progress`);
+          console.log(`  ${picocolors.dim("ssh_connect")}  SSH into a remote host`);
+          console.log(`  ${picocolors.dim("c2_deploy")}    Deploy an implant to a target`);
+          console.log(`  ${picocolors.dim("remember")}    Search past sessions`);
+          console.log(picocolors.dim("\n  Tips:"));
+          console.log(picocolors.dim("  • Just type 'offense' or 'defense' to switch modes"));
+          console.log(picocolors.dim("  • Say 'abilities' to see all tools in current mode"));
+          console.log(picocolors.dim("  • Search sessions: ananse search <query>"));
+          console.log(picocolors.dim("  • Review changes: ananse review\n"));
           break;
         case "model":
           if (args.length === 0) {
