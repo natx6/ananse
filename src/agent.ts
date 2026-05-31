@@ -750,6 +750,12 @@ export async function runAgentLoop(
       } else {
         process.stdout.write(picocolors.red(`\n  ${message}\n`));
       }
+      // Save partial response so the user can continue where it left off
+      if (responseText.trim() && currentSession) {
+        const partial = responseText.trim();
+        addMessage(currentSession, toInternalMessage("assistant", partial + "\n\n_[response cut off — continue to resume]_"));
+        try { await saveSession(currentSession); } catch {}
+      }
       if (restoreStdin) { try { restoreStdin(); } catch {} }
       return currentSession;
     }
