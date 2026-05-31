@@ -42,8 +42,7 @@ header {
 
 #sidebar {
   width: 260px; background: var(--surface); border-right: 1px solid var(--border);
-  display: flex; flex-direction: column; flex-shrink: 0; transition: margin-left .2s;
-  overflow: hidden;
+  display: flex; flex-direction: column; flex-shrink: 0; transition: margin-left .2s; overflow: hidden;
 }
 #sidebar.hidden { margin-left: -260px; }
 #sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
@@ -107,8 +106,7 @@ header {
     <div id="sidebar-header"><span>History</span><button id="new-chat">+ New</button></div>
     <div id="sidebar-list"></div>
     <div id="sidebar-footer">
-      <button id="exportBtn">Export</button>
-      <button id="clearBtn">Clear</button>
+      <button id="clearBtn">Clear All</button>
     </div>
   </div>
   <div id="main">
@@ -124,15 +122,20 @@ header {
   </div>
 </div>
 <script>
-var STORAGE_KEY = 'ananse_chat';
+var SESSIONS_KEY = 'ananse_sessions';
 var SIDEBAR_KEY = 'ananse_sidebar';
 var $ = function(s) { return document.querySelector(s); };
 var chat = $('#chat-inner'), input = $('#input'), send = $('#send'), badge = $('#modeBadge');
-var sidebarList = $('#sidebar-list');
-var messages = [];
+var sessions = [];  // [{id, name, messages, mode}]
+var currentId = null;
 var sidebarOpen = true;
 
-function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch {} }
+function saveSessions() { try { localStorage.setItem(SESSIONS_KEY, JSON.stringify({sessions: sessions, current: currentId})); } catch {} }
+
+function getCurrent() {
+  for (var i = 0; i < sessions.length; i++) { if (sessions[i].id === currentId) return sessions[i]; }
+  return null;
+}
 
 function addMsg(role, text, persist) {
   if (persist === undefined) persist = true;
@@ -143,48 +146,95 @@ function addMsg(role, text, persist) {
   var b = document.createElement('div'); b.className = 'bubble';
   b.textContent = text; d.appendChild(b);
   chat.appendChild(d); $('#chat').scrollTop = $('#chat').scrollHeight;
-  if (persist) { messages.push({role: role, text: text}); save(); updateSidebar(); }
+  if (persist) {
+    var cur = getCurrent();
+    if (cur) { cur.messages.push({role: role, text: text}); saveSessions(); updateSidebar(); }
+  }
+}
+
+function renderChat(msgs) {
+  chat.innerHTML = '';
+  for (var i = 0; i < msgs.length; i++) {
+    var d = document.createElement('div'); d.className = 'msg ' + msgs[i].role;
+    var l = document.createElement('div'); l.className = 'label';
+    l.textContent = msgs[i].role === 'user' ? 'You' : 'Ananse';
+    d.appendChild(l);
+    var b = document.createElement('div'); b.className = 'bubble';
+    b.textContent = msgs[i].text; d.appendChild(b);
+    chat.appendChild(d);
+  }
+  $('#chat').scrollTop = $('#chat').scrollHeight;
+}
+
+function updateSidebar() {
+  sidebarList.innerHTML = '';
+  for (var i = sessions.length - 1; i >= 0; i--) {
+    var s = sessions[i];
+    var first = '';
+    for (var j = 0; j < s.messages.length; j++) { if (s.messages[j].role === 'user') { first = s.messages[j].text.slice(0, 40); break; } }
+    if (!first) first = '(empty)';
+    var item = document.createElement('div'); item.className = 'sidebar-item' + (s.id === currentId ? ' active' : '');
+    item.textContent = first;
+    item.addEventListener('click', function(id) { return function() { switchSession(id); }; }(s.id));
+    sidebarList.appendChild(item);
+  }
+}
+
+function switchSession(id) {
+  currentId = id;
+  var cur = getCurrent();
+  if (cur) { renderChat(cur.messages); badge.textContent = cur.mode || 'NORMAL'; badge.className = 'badge ' + (cur.mode || 'NORMAL').toLowerCase(); }
+  updateSidebar();
+  saveSessions();
+}
+
+function newSession() {
+  var cur = getCurrent();
+  if (cur && cur.messages.length === 0) return; // don't save empty
+  var id = 's' + Date.now();
+  var mode = badge.textContent;
+  sessions.push({id: id, name: '', messages: [], mode: mode});
+  currentId = id;
+  chat.innerHTML = '';
+  saveSessions(); updateSidebar();
+  addMsg('assistant', 'Ananse - Advanced Neural Agent for Network Security Exploitation. Ready. What would you like to do?');
 }
 
 function restore() {
   try {
-    var raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { messages = JSON.parse(raw); for (var m of messages) addMsg(m.role, m.text, false); }
+    var raw = localStorage.getItem(SESSIONS_KEY);
+    if (raw) {
+      var data = JSON.parse(raw);
+      sessions = data.sessions || [];
+      currentId = data.current || null;
+      if (currentId) {
+        var cur = getCurrent();
+        if (cur) {
+          if (cur.mode) { badge.textContent = cur.mode; badge.className = 'badge ' + cur.mode.toLowerCase(); }
+          renderChat(cur.messages);
+          return;
+        }
+      }
+    }
   } catch {}
+  // No saved session - create one
+  newSession();
 }
 
-function updateSidebar() {
-  var firstMsg = '';
-  for (var i = 0; i < messages.length; i++) {
-    if (messages[i].role === 'user') { firstMsg = messages[i].text.slice(0, 40); break; }
-  }
-  sidebarList.innerHTML = '';
-  var item = document.createElement('div'); item.className = 'sidebar-item active';
-  item.textContent = firstMsg || 'New conversation';
-  sidebarList.appendChild(item);
-}
-
-function toggleSidebar() {
+$('#menuBtn').addEventListener('click', function() {
   sidebarOpen = !sidebarOpen;
   $('#sidebar').className = sidebarOpen ? '' : 'hidden';
   try { localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? '1' : '0'); } catch {}
-}
-
-$('#menuBtn').addEventListener('click', toggleSidebar);
-
-$('#new-chat').addEventListener('click', function() {
-  messages = []; chat.innerHTML = ''; save(); updateSidebar();
-  addMsg('assistant', 'Ananse - Advanced Neural Agent for Network Security Exploitation. Ready. What would you like to do?');
 });
+
+$('#new-chat').addEventListener('click', newSession);
 
 $('#clearBtn').addEventListener('click', function() {
-  if (confirm('Clear all messages?')) { messages = []; chat.innerHTML = ''; save(); updateSidebar(); }
-});
-
-$('#exportBtn').addEventListener('click', function() {
-  var text = messages.map(function(m) { return (m.role === 'user' ? 'You: ' : 'Ananse: ') + m.text; }).join('\n\n');
-  var blob = new Blob([text], {type: 'text/plain'});
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ananse-chat.txt'; a.click();
+  if (!confirm('Delete all sessions?')) return;
+  sessions = []; currentId = null; chat.innerHTML = '';
+  try { localStorage.removeItem(SESSIONS_KEY); } catch {}
+  updateSidebar();
+  newSession();
 });
 
 var typing = null;
@@ -201,11 +251,13 @@ function hideTyping() { if (typing) { typing.remove(); typing = null; } }
 
 function setMode(m) {
   badge.textContent = m; badge.className = 'badge ' + m.toLowerCase();
-  var clear = m === 'OFFENSE' ? 'TAO//ECI - Full Spectrum Ops' : m === 'DEFENSE' ? 'FORNSAT//SI - SIGINT Defense' : 'UNCLASSIFIED';
-  var tools = m === 'OFFENSE' ? 'recon, privesc, persistence, exploit, C2, brute force, Shodan, CVE, web probe, reporting'
-    : m === 'DEFENSE' ? 'monitoring (FIM, rootkit), compliance (SSH, password, mount, auditd), audit, SBOM, harden'
-    : 'read, write, edit, command, search, crawl, analyze, scan, ssh, c2, missions';
-  addMsg('assistant', 'Mode: ' + m + '\nClearance: ' + clear + '\nTools: ' + tools);
+  var cur = getCurrent(); if (cur) cur.mode = m; saveSessions();
+  var sym = m === 'OFFENSE' ? '║' : m === 'DEFENSE' ? '║' : '║';
+  var line1 = m === 'OFFENSE' ? '╔══════════════════════════╗' : m === 'DEFENSE' ? '╔══════════════════════════╗' : '╔══════════════════════════╗';
+  var line2 = m === 'OFFENSE' ? '║      OFFENSE MODE        ║' : m === 'DEFENSE' ? '║      DEFENSE MODE        ║' : '║      NORMAL MODE         ║';
+  var line3 = m === 'OFFENSE' ? '║  TAO//ECI - Full Spec Ops║' : m === 'DEFENSE' ? '║ FORNSAT//SI - SIGINT     ║' : '║  UNCLASSIFIED - General  ║';
+  var line4 = '╚══════════════════════════╝';
+  addMsg('assistant', line1 + '\n' + line2 + '\n' + line3 + '\n' + line4);
 }
 
 async function sendMsg(text) {
@@ -214,10 +266,11 @@ async function sendMsg(text) {
   if (['offense','defense','normal'].includes(t)) { setMode(t.toUpperCase()); input.value = ''; return; }
   input.value = ''; addMsg('user', text); showTyping();
   try {
-    var history = messages.slice(-20).map(function(m) { return {role: m.role, content: m.text}; });
+    var cur = getCurrent();
+    var msgs = cur ? cur.messages.slice(-20).map(function(m) { return {role: m.role, content: m.text}; }) : [];
     var r = await fetch('/api/chat', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: text, mode: badge.textContent, history: history})
+      body: JSON.stringify({message: text, mode: badge.textContent, history: msgs})
     });
     hideTyping();
     if (!r.ok) { addMsg('assistant', 'Error: ' + (await r.text())); return; }
@@ -234,9 +287,6 @@ send.addEventListener('click', function() { sendMsg(input.value); });
 try { if (localStorage.getItem(SIDEBAR_KEY) === '0') { sidebarOpen = false; $('#sidebar').className = 'hidden'; } } catch {}
 
 restore();
-if (messages.length === 0) {
-  addMsg('assistant', 'Ananse - Advanced Neural Agent for Network Security Exploitation. Ready. What would you like to do?');
-}
 updateSidebar();
 </script>
 </body>
