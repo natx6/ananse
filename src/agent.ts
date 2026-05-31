@@ -540,7 +540,6 @@ export async function runAgentLoop(
           break;
         case "tool-call":
           if (spinnerActive) { spinnerActive = false; s.stop(""); }
-          if (showedPrefix) process.stdout.write("\n");
           printToolIndicator(event.toolName, event.input as Record<string, unknown>);
           break;
         case "tool-result":
@@ -603,7 +602,7 @@ export async function runAgentLoop(
               output = lines.slice(0, 30).join("\n") + `\n${picocolors.dim(`  … ${lineCount - 30} more lines`)}`;
             }
             if (output.length > 1) {
-              process.stdout.write(`${picocolors.dim(output)}\n\n`);
+              process.stdout.write(`${picocolors.dim(output)}\n`);
             }
           }
           // Mid-turn checkpoint: save session after each tool call
@@ -650,7 +649,7 @@ export async function runAgentLoop(
         };
         // Display cost for this turn
         const costStr = estCost < 0.01 ? `< $0.01` : `$${estCost.toFixed(4)}`;
-        process.stdout.write(picocolors.dim(`  [${formatNumber(inputTokens)} in / ${formatNumber(outputTokens)} out — ~${costStr}]\n`));
+        process.stdout.write(picocolors.dim(`  [${formatNumber(inputTokens)}→${formatNumber(outputTokens)} tok ~${costStr}]\n`));
       }
 
       // 8d. Persist each message to the session
