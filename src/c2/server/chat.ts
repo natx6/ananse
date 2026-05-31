@@ -1,10 +1,29 @@
 import { Router } from "express";
+import { readFileSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+/**
+ * Read AI API key from config file as fallback.
+ */
+function readAiApiKey(): string | null {
+  try {
+    const cfgPath = join(homedir(), ".ananse", "config.json");
+    if (existsSync(cfgPath)) {
+      const cfg = JSON.parse(readFileSync(cfgPath, "utf-8")) as Record<string, string>;
+      return cfg.apiKey || null;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
 
 /**
  * Simple AI chat endpoint for the web UI.
  * Forwards messages to OpenRouter and returns responses.
+ * Uses C2_CHAT_API_KEY env var, then falls back to ~/.ananse/config.json
  */
-export function createChatRouter(apiKey: string) {
+export function createChatRouter(c2ApiKey: string, aiApiKey?: string) {
+  const resolvedKey = aiApiKey || readAiApiKey() || c2ApiKey;
   const router = Router();
 
   router.post("/", async (req, res) => {
@@ -20,7 +39,7 @@ export function createChatRouter(apiKey: string) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${resolvedKey}`,
         },
         body: JSON.stringify({
           model: "google/gemini-2.0-flash-001",

@@ -93,7 +93,7 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
   // Web chat UI
   const webDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "src", "c2", "server", "web");
   app.use(express.static(webDir));
-  app.use("/api/chat", createChatRouter(config.apiKey));
+  app.use("/api/chat", createChatRouter(config.apiKey, process.env.C2_CHAT_API_KEY));
 
   let dnsServer: { start: () => Promise<void>; stop: () => Promise<void> } | null = null;
   const dnsDomain = process.env.C2_DNS_DOMAIN;
