@@ -241,14 +241,19 @@ async function main(): Promise<void> {
     let response: string | symbol;
 
     if (firstTurn) {
-      response = await text({
-        message: "How can I help?",
-        placeholder: "scan, deploy, audit, build...",
-      });
       firstTurn = false;
-    } else {
-      response = await barePrompt();
+      // Auto-fire the intro without waiting for user input
+      const introSession = await runAgentLoop(
+        "start", config ?? {}, personality, fileCount, userName, currentSession, resumedSession,
+      );
+      if (introSession) {
+        currentSession = introSession;
+      }
+      console.log("");
+      continue;
     }
+
+    response = await barePrompt();
 
     if (isCancel(response) || response === undefined) {
       console.log(picocolors.yellow("\nGoodbye."));
