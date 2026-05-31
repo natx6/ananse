@@ -46,6 +46,12 @@ import { createComplianceSshTool, createCompliancePasswordTool, createCompliance
 import { createAuditLogsTool, createAuditNetworkTool, createAuditUsersTool } from "./defense/audit.js";
 import { createSbomGenerateTool, createSbomCveCheckTool } from "./defense/sbom.js";
 
+// Web fetch tool
+import { createWebFetchTool } from "./webfetch.js";
+
+// Checkpoint tool
+import { createCheckpointTool } from "./checkpoint.js";
+
 // Analyze tool
 import { createAnalyzeTool } from "./analyze.js";
 
@@ -139,6 +145,10 @@ const toolEntries: ToolEntry[] = [
   { name: "audit_users", factory: createAuditUsersTool as ToolFactory },
   { name: "sbom_generate", factory: createSbomGenerateTool as ToolFactory },
   { name: "sbom_cve_check", factory: createSbomCveCheckTool as ToolFactory },
+
+  // Web + Checkpoint (all modes)
+  { name: "web_fetch", factory: createWebFetchTool as ToolFactory },
+  { name: "checkpoint", factory: createCheckpointTool as ToolFactory },
 
   // Analyze (all modes)
   { name: "analyze", factory: createAnalyzeTool as ToolFactory },

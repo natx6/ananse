@@ -151,6 +151,8 @@ export function createSystemPrompt(
       subagent: "Spawn a focused sub-agent",
       submit_plan: "Submit a plan for user approval before multi-step ops",
       remember: "Search past sessions and knowledge base",
+      web_fetch: "Fetch a URL and return its content as text — use for docs, CVEs, research",
+      checkpoint: "Create a git checkpoint (auto-stash) before risky changes — enables rollback",
       change_mode: "Switch between NORMAL, OFFENSE, and DEFENSE modes.",
 
       // Profile
@@ -268,6 +270,11 @@ export function createSystemPrompt(
  * Converts raw AI SDK message data into the project's internal Message shape
  * so it can be persisted via addMessage / saveSession.
  */
+/** Format large numbers with commas */
+function formatNumber(n: number): string {
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 function toInternalMessage(
   role: string,
   content: string | unknown[],
@@ -628,13 +635,22 @@ export async function runAgentLoop(
       const { messages: aiMessages } = await result.response;
       const usage = await result.usage;
 
-      // 8c. Track token usage
+      // 8c. Track token usage and estimate cost
       if (usage) {
-      currentSession.tokenUsage = {
-        promptTokens: usage.inputTokens ?? 0,
-        completionTokens: usage.outputTokens ?? 0,
-        totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
-      };
+        const inputTokens = usage.inputTokens ?? 0;
+        const outputTokens = usage.outputTokens ?? 0;
+        // Rough cost estimate: Gemini Flash ~$0.075/1M input, $0.30/1M output
+        const costPer1MInput = 0.075;
+        const costPer1MOutput = 0.30;
+        const estCost = (inputTokens / 1_000_000 * costPer1MInput) + (outputTokens / 1_000_000 * costPer1MOutput);
+        currentSession.tokenUsage = {
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens: inputTokens + outputTokens,
+        };
+        // Display cost for this turn
+        const costStr = estCost < 0.01 ? `< $0.01` : `$${estCost.toFixed(4)}`;
+        process.stdout.write(picocolors.dim(`  [${formatNumber(inputTokens)} in / ${formatNumber(outputTokens)} out — ~${costStr}]\n`));
       }
 
       // 8d. Persist each message to the session

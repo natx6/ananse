@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fastGlob from "fast-glob";
+import picocolors from "picocolors";
 import { requestPermission } from "./permission.js";
 import { resolveUserPath } from "./pathResolver.js";
 import { getRemoteExec } from "./execContext.js";
@@ -102,6 +103,22 @@ export function createEditTool() {
           return { success: false, data: "", error: `String not found in file: ${oldString}` };
         }
         const updated = content.replace(oldString, newString);
+
+        // Show diff preview
+        const oldLines = oldString.split("\n");
+        const newLines = newString.split("\n");
+        process.stdout.write(picocolors.cyan(`  ── diff in ${path} ──\n`));
+        const maxLines = Math.max(oldLines.length, newLines.length);
+        for (let i = 0; i < maxLines; i++) {
+          if (i < oldLines.length && i < newLines.length && oldLines[i] === newLines[i]) {
+            process.stdout.write(`  ${picocolors.dim(` ${oldLines[i]}`)}\n`);
+          } else {
+            if (i < oldLines.length) process.stdout.write(`  ${picocolors.red(`-${oldLines[i]}`)}\n`);
+            if (i < newLines.length) process.stdout.write(`  ${picocolors.green(`+${newLines[i]}`)}\n`);
+          }
+        }
+        process.stdout.write(picocolors.cyan(`  ────────────────────\n`));
+
         await writeFile(path, updated, "utf-8");
         return { success: true, data: "File updated successfully" };
       } catch (err: unknown) {
