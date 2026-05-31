@@ -32,6 +32,7 @@ import {
 } from "./context.js";
 import type { ContextData, ActionRecord } from "./context.js";
 import { getMissionSummary, loadLatestMission } from "./mission.js";
+import { loadProfile, getProfileSummary } from "./profile.js";
 
 // ---------------------------------------------------------------------------
 // createSystemPrompt
@@ -53,6 +54,7 @@ export function createSystemPrompt(
   contextSummary?: string,
   missionSummary?: string | null,
   isFirstMessage?: boolean,
+  userProfile?: string | null,
 ): string {
   const parts: string[] = [];
 
@@ -135,6 +137,11 @@ export function createSystemPrompt(
     parts.push(``, `<mission>`, missionSummary, `</mission>`);
   }
 
+  // User profile
+  if (userProfile) {
+    parts.push(``, `<user_profile>`, userProfile, `</user_profile>`);
+  }
+
   // Tool listing
   const toolNames = getToolNamesForMode(mode);
   if (toolNames.length > 0) {
@@ -151,6 +158,10 @@ export function createSystemPrompt(
       submit_plan: "Submit a plan for user approval before multi-step ops",
       remember: "Search past sessions and knowledge base",
       change_mode: "Switch between NORMAL, OFFENSE, and DEFENSE modes.",
+
+      // Profile
+      profile_get: "Show your user profile (what Ananse knows about you)",
+      profile_set: "Update your profile — tell Ananse about yourself, preferences, and projects",
 
       // Mission
       mission_set: "Set a persistent mission goal with steps — progress is tracked across turns",
@@ -444,7 +455,9 @@ export async function runAgentLoop(
   // 5. Build system prompt
   // -----------------------------------------------------------------------
   const contextSummary = getContextSummary(sessionCtx);
-  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined, missionSummary, isFirstMessage);
+  const profile = await loadProfile().catch(() => null);
+  const userProfileSummary = profile ? getProfileSummary(profile) : null;
+  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined, missionSummary, isFirstMessage, userProfileSummary);
 
   // -----------------------------------------------------------------------
   // 6. Create tool definitions and filter by mode

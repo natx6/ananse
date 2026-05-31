@@ -45,6 +45,9 @@ import { createComplianceSshTool, createCompliancePasswordTool, createCompliance
 import { createAuditLogsTool, createAuditNetworkTool, createAuditUsersTool } from "./defense/audit.js";
 import { createSbomGenerateTool, createSbomCveCheckTool } from "./defense/sbom.js";
 
+// Profile tools
+import { createProfileGetTool, createProfileSetTool } from "./profile.js";
+
 // Mission tools
 import { createMissionSetTool, createMissionStepTool, createMissionStatusTool, createMissionCancelTool } from "./mission.js";
 
@@ -131,6 +134,10 @@ const toolEntries: ToolEntry[] = [
   { name: "audit_users", factory: createAuditUsersTool as ToolFactory },
   { name: "sbom_generate", factory: createSbomGenerateTool as ToolFactory },
   { name: "sbom_cve_check", factory: createSbomCveCheckTool as ToolFactory },
+
+  // Profile (all modes)
+  { name: "profile_get", factory: createProfileGetTool as ToolFactory },
+  { name: "profile_set", factory: createProfileSetTool as ToolFactory },
 
   // Mission (all modes)
   { name: "mission_set", factory: createMissionSetTool as ToolFactory },
