@@ -195,6 +195,7 @@ export function createSystemPrompt(
       exploit_package_vulns: "Check installed packages for known CVEs",
       exploit_service_scan: "Scan for vulnerable services",
       ssh_bruteforce: "Attempt SSH password auth against a target with common passwords (authorized testing only)",
+      auto_chain: "Auto-chain: scan subnet → find services → brute creds → report access. Speed: stealth/normal/aggressive",
       find_secrets: "Search filesystem for potential secrets, credentials, API keys, and tokens",
       web_probe: "Probe HTTP endpoints, check security headers, and discover paths",
       shodan_ip: "Look up an IP on Shodan — ports, services, banners, and known vulnerabilities",

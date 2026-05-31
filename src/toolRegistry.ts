@@ -32,6 +32,7 @@ import { createPrivescSudoTool, createPrivescWritableTool, createPrivescKernelTo
 import { createPersistSshKeysTool, createPersistStartupTool, createPersistSshConfigTool } from "./offense/persistence.js";
 import { createExploitPackageVulnsTool, createExploitServiceScanTool } from "./offense/exploit.js";
 import { createSshBruteforceTool, createFindSecretsTool, createWebProbeTool } from "./offense/credential.js";
+import { createAutoChainTool } from "./offense/chain.js";
 import { createShodanIPTool, createShodanSearchTool } from "./offense/shodan.js";
 import { createCveSearchTool, createCveDetailTool } from "./offense/cve.js";
 import { createReportTool } from "./offense/report.js";
@@ -106,6 +107,7 @@ const toolEntries: ToolEntry[] = [
   { name: "exploit_package_vulns", factory: createExploitPackageVulnsTool as ToolFactory },
   { name: "exploit_service_scan", factory: createExploitServiceScanTool as ToolFactory },
   { name: "ssh_bruteforce", factory: createSshBruteforceTool as ToolFactory },
+  { name: "auto_chain", factory: createAutoChainTool as ToolFactory },
   { name: "find_secrets", factory: createFindSecretsTool as ToolFactory },
   { name: "web_probe", factory: createWebProbeTool as ToolFactory },
   { name: "shodan_ip", factory: createShodanIPTool as ToolFactory },
