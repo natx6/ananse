@@ -19,7 +19,7 @@ export function createChatRouter() {
 
   router.post("/", async (req, res) => {
     try {
-      const { message, mode } = req.body;
+      const { message, mode, history } = req.body;
       if (!message) return res.status(400).json({ error: "message required" });
 
       const config = loadConfig();
@@ -30,10 +30,19 @@ export function createChatRouter() {
 
       const systemPrompt = `You are Ananse (Advanced Neural Agent for Network Security Exploitation), operating in ${mode || "NORMAL"} mode. Be direct and concise.`;
 
+      // Build messages from history + current message
+      const msgs: Array<{ role: "user" | "assistant"; content: string }> = [];
+      if (Array.isArray(history)) {
+        for (const h of history) {
+          if (h.role === "user" || h.role === "assistant") msgs.push({ role: h.role, content: String(h.content) });
+        }
+      }
+      msgs.push({ role: "user", content: message });
+
       const result = streamText({
         model,
         system: systemPrompt,
-        messages: [{ role: "user", content: message }],
+        messages: msgs,
         maxRetries: 1,
       });
 
