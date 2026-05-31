@@ -237,7 +237,7 @@ export function createSystemPrompt(
   }
 
   const introRule = isFirstMessage
-    ? "This is your first message in this session. Start by introducing yourself with the full name (Ananse — Advanced Neural Agent for Network Security Exploitation) and state your current mode: " + mode.toUpperCase() + ". Then ask what they want to do."
+    ? "This is your first message in this session. Write a brief opening paragraph: introduce yourself as Ananse (Advanced Neural Agent for Network Security Exploitation), state your current mode (" + mode.toUpperCase() + "), summarize what you can do in this mode in 2-3 sentences, and ask what they'd like to do today."
     : "If the user asks about your capabilities ('abilities', 'what can you do', 'capabilities'), list what you can do in the current mode. Otherwise greet back briefly. No re-introduction needed.";
 
   parts.push(
