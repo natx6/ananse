@@ -1,6 +1,7 @@
 import { tool, streamText, stepCountIs } from "ai";
 import { z } from "zod";
 import picocolors from "picocolors";
+import { cwd } from "node:process";
 import type { AnanseConfig } from "./utils.js";
 import type { ToolResult } from "./types.js";
 import { createModelFromConfig } from "./agent.js";
@@ -70,6 +71,7 @@ Use for complex sub-tasks that benefit from focused attention.`,
       const systemParts = [
         "You are a focused sub-agent. Your task is limited and specific.",
         "",
+        `Working directory: ${cwd()}`,
         `Goal: ${goal}`,
         "",
         "You have access to these tools: " + allowedTools.join(", "),

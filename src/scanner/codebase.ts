@@ -31,18 +31,18 @@ const OWASP_PATTERNS = [
  */
 export function createScanSecretsTool() {
   return tool({
-    description: "Scan files for hardcoded secrets, API keys, tokens, and private keys. Pass an optional path to scan a specific directory instead of the whole project.",
+    description: "Scan files for hardcoded secrets, API keys, tokens, and private keys. Pass a `path` parameter pointing to the file or directory to scan.",
     inputSchema: z.object({
-      path: z.string().optional().describe("File or directory to scan (default: whole project)"),
+      path: z.string().describe("File or directory to scan (e.g., '/home/user/project' or '~/Documents/project')"),
     }),
     execute: async ({ path }): Promise<ToolResult> => {
-      let scanPath = path ?? ".";
-      if (path) {
-        const resolved = await resolveUserPath(path);
-        if (resolved) scanPath = resolved.path;
+      const resolved = await resolveUserPath(path);
+      const scanPath = resolved?.path ?? path;
+      if (!scanPath) {
+        return { success: false, data: "", error: "No path specified. Use the path parameter to specify which file or directory to scan." };
       }
       const files = await fastGlob(`${scanPath}/**/*`, {
-        ignore: ["node_modules/**", ".git/**", "dist/**", "*.min.js", "*.map"],
+        ignore: ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/*.min.js", "**/*.map"],
         dot: false,
         onlyFiles: true,
       });
@@ -81,18 +81,18 @@ export function createScanSecretsTool() {
  */
 export function createScanOwaspTool() {
   return tool({
-    description: "Scan code for common OWASP Top 10 vulnerability patterns: SQL injection, command injection, path traversal, XSS, insecure crypto, and more.",
+    description: "Scan code for common OWASP Top 10 vulnerability patterns. Pass a `path` parameter pointing to the file or directory to scan.",
     inputSchema: z.object({
-      path: z.string().optional().describe("File or directory to scan (default: current directory)"),
+      path: z.string().describe("File or directory to scan (e.g., '/home/user/project' or '~/Documents/project')"),
     }),
     execute: async ({ path }): Promise<ToolResult> => {
-      let scanPath = path ?? ".";
-      if (path) {
-        const resolved = await resolveUserPath(path);
-        if (resolved) scanPath = resolved.path;
+      const resolved = await resolveUserPath(path);
+      const scanPath = resolved?.path ?? path;
+      if (!scanPath) {
+        return { success: false, data: "", error: "No path specified. Use the path parameter to specify which file or directory to scan." };
       }
       const files = await fastGlob(`${scanPath}/**/*.{ts,js,jsx,tsx,py,java,go,rs,php}`, {
-        ignore: ["node_modules/**", ".git/**", "dist/**"],
+        ignore: ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/*.min.js"],
         dot: false,
         onlyFiles: true,
       });
