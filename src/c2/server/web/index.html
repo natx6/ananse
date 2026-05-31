@@ -24,8 +24,10 @@ body::before {
 }
 header {
   background: var(--surface); border-bottom: 1px solid var(--border);
-  padding: 0 20px; display: flex; align-items: center; height: 48px; gap: 14px; z-index: 1; flex-shrink: 0;
+  padding: 0 16px; display: flex; align-items: center; height: 48px; gap: 12px; z-index: 2; flex-shrink: 0;
 }
+.menu-btn { background: none; border: none; color: var(--dim); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+.menu-btn:hover { background: var(--surface2); color: var(--text); }
 .logo { font-size: 15px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
 .logo .icon { width: 20px; height: 20px; background: var(--accent); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
 .badge { font-size: 10px; padding: 2px 10px; border-radius: 3px; font-weight: 700; letter-spacing: 1px; border: 1px solid; }
@@ -36,24 +38,45 @@ header {
 .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 .dot.on { background: var(--green); } .dot.off { background: var(--accent); }
 
-#chat { flex: 1; overflow-y: auto; z-index: 1; }
+#layout { display: flex; flex: 1; overflow: hidden; z-index: 1; }
+
+#sidebar {
+  width: 260px; background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0; transition: margin-left .2s;
+  overflow: hidden;
+}
+#sidebar.hidden { margin-left: -260px; }
+#sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+#sidebar-header span { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); }
+#new-chat { background: var(--accent); color: #fff; border: none; border-radius: 4px; padding: 4px 10px; font-size: 10px; font-weight: 600; cursor: pointer; letter-spacing: .5px; }
+#sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
+#sidebar-list::-webkit-scrollbar { width: 3px; }
+#sidebar-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.sidebar-item {
+  padding: 8px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  color: var(--dim); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sidebar-item:hover { background: var(--surface2); color: var(--text); }
+.sidebar-item.active { background: var(--surface2); color: var(--text); border-left: 2px solid var(--cyan); }
+#sidebar-footer { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+#sidebar-footer button { background: none; border: 1px solid var(--border); color: var(--dim); border-radius: 4px; padding: 5px 10px; font-size: 10px; cursor: pointer; font-family: var(--font); flex: 1; }
+#sidebar-footer button:hover { border-color: var(--accent); color: var(--text); }
+
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#chat { flex: 1; overflow-y: auto; }
 #chat::-webkit-scrollbar { width: 4px; }
 #chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 #chat-inner { max-width: 720px; margin: 0 auto; padding: 16px 20px; }
 
-.msg { margin-bottom: 6px; animation: fadeIn 0.2s ease; }
+.msg { margin-bottom: 6px; animation: fadeIn .2s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .msg.assistant { max-width: 92%; }
 .msg.user { display: flex; flex-direction: column; align-items: flex-end; }
 .msg .label { font-size: 10px; font-weight: 600; letter-spacing: .5px; color: var(--dim); margin-bottom: 3px; }
 .msg.assistant .label { color: var(--cyan); }
-.msg.user .label { color: var(--dim); }
 .msg .bubble { line-height: 1.7; white-space: pre-wrap; word-break: break-word; font-size: 13px; }
 .msg.assistant .bubble { max-width: 100%; }
-.msg.user .bubble {
-  background: rgba(61,212,200,0.08); border-radius: 12px 4px 12px 12px;
-  padding: 8px 14px; width: fit-content; max-width: 80%;
-}
+.msg.user .bubble { background: rgba(61,212,200,0.08); border-radius: 12px 4px 12px 12px; padding: 8px 14px; width: fit-content; max-width: 80%; }
 
 .typing { display: flex; gap: 4px; padding: 6px 0; }
 .typing span { width: 5px; height: 5px; background: var(--dim); border-radius: 50%; animation: pulse 1.4s infinite; }
@@ -61,46 +84,58 @@ header {
 .typing span:nth-child(3) { animation-delay: .4s; }
 @keyframes pulse { 0%,80%,100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
 
-#bar { background: var(--surface); border-top: 1px solid var(--border); padding: 14px 20px 18px; z-index: 1; flex-shrink: 0; }
+#bar { background: var(--surface); border-top: 1px solid var(--border); padding: 14px 20px 18px; flex-shrink: 0; }
 #bar-inner { max-width: 720px; margin: 0 auto; }
 #row { display: flex; gap: 10px; }
-#row input {
-  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-  padding: 10px 14px; color: var(--text); font-family: var(--font); font-size: 13px;
-  outline: none; transition: border-color .15s;
-}
+#row input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--text); font-family: var(--font); font-size: 13px; outline: none; transition: border-color .15s; }
 #row input:focus { border-color: var(--cyan); }
 #row input::placeholder { color: var(--dim); font-style: italic; }
 #row button { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 10px 18px; font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s; }
 #row button:hover { background: var(--accent-hover); }
-#row button:disabled { opacity: .35; cursor: not-allowed; }
-@media (max-width: 600px) { #chat { padding: 10px 12px; } #bar { padding: 10px 12px 14px; } }
+@media (max-width: 600px) { #sidebar { width: 200px; } #sidebar.hidden { margin-left: -200px; } }
 </style>
 </head>
 <body>
 <header>
+  <button class="menu-btn" id="menuBtn">☰</button>
   <div class="logo"><span class="icon">◈</span> Ananse</div>
   <div class="badge" id="modeBadge">NORMAL</div>
   <div class="right"><span class="dot on"></span><span id="statusTxt">Connected</span></div>
 </header>
-<div id="chat"><div id="chat-inner"></div></div>
-<div id="bar">
-  <div id="bar-inner">
-  <div id="row">
-    <input type="text" id="input" placeholder="Type a message..." autofocus>
-    <button id="send">Send</button>
+<div id="layout">
+  <div id="sidebar">
+    <div id="sidebar-header"><span>History</span><button id="new-chat">+ New</button></div>
+    <div id="sidebar-list"></div>
+    <div id="sidebar-footer">
+      <button id="exportBtn">Export</button>
+      <button id="clearBtn">Clear</button>
+    </div>
   </div>
+  <div id="main">
+    <div id="chat"><div id="chat-inner"></div></div>
+    <div id="bar">
+      <div id="bar-inner">
+        <div id="row">
+          <input type="text" id="input" placeholder="Type a message..." autofocus>
+          <button id="send">Send</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <script>
-const STORAGE_KEY = 'ananse_chat';
-const $ = s => document.querySelector(s);
-const chat = $('#chat-inner'), input = $('#input'), send = $('#send'), badge = $('#modeBadge');
-let messages = [];
+var STORAGE_KEY = 'ananse_chat';
+var SIDEBAR_KEY = 'ananse_sidebar';
+var $ = function(s) { return document.querySelector(s); };
+var chat = $('#chat-inner'), input = $('#input'), send = $('#send'), badge = $('#modeBadge');
+var sidebarList = $('#sidebar-list');
+var messages = [];
+var sidebarOpen = true;
 
 function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch {} }
 
-function addMsg(role, text, persist=true) {
+function addMsg(role, text, persist) {
+  if (persist === undefined) persist = true;
   var d = document.createElement('div'); d.className = 'msg ' + role;
   var l = document.createElement('div'); l.className = 'label';
   l.textContent = role === 'user' ? 'You' : 'Ananse';
@@ -108,7 +143,7 @@ function addMsg(role, text, persist=true) {
   var b = document.createElement('div'); b.className = 'bubble';
   b.textContent = text; d.appendChild(b);
   chat.appendChild(d); $('#chat').scrollTop = $('#chat').scrollHeight;
-  if (persist) { messages.push({role, text}); save(); }
+  if (persist) { messages.push({role: role, text: text}); save(); updateSidebar(); }
 }
 
 function restore() {
@@ -118,6 +153,40 @@ function restore() {
   } catch {}
 }
 
+function updateSidebar() {
+  var firstMsg = '';
+  for (var i = 0; i < messages.length; i++) {
+    if (messages[i].role === 'user') { firstMsg = messages[i].text.slice(0, 40); break; }
+  }
+  sidebarList.innerHTML = '';
+  var item = document.createElement('div'); item.className = 'sidebar-item active';
+  item.textContent = firstMsg || 'New conversation';
+  sidebarList.appendChild(item);
+}
+
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  $('#sidebar').className = sidebarOpen ? '' : 'hidden';
+  try { localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? '1' : '0'); } catch {}
+}
+
+$('#menuBtn').addEventListener('click', toggleSidebar);
+
+$('#new-chat').addEventListener('click', function() {
+  messages = []; chat.innerHTML = ''; save(); updateSidebar();
+  addMsg('assistant', 'Ananse - Advanced Neural Agent for Network Security Exploitation. Ready. What would you like to do?');
+});
+
+$('#clearBtn').addEventListener('click', function() {
+  if (confirm('Clear all messages?')) { messages = []; chat.innerHTML = ''; save(); updateSidebar(); }
+});
+
+$('#exportBtn').addEventListener('click', function() {
+  var text = messages.map(function(m) { return (m.role === 'user' ? 'You: ' : 'Ananse: ') + m.text; }).join('\n\n');
+  var blob = new Blob([text], {type: 'text/plain'});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ananse-chat.txt'; a.click();
+});
+
 var typing = null;
 function showTyping() {
   if (typing) return;
@@ -126,7 +195,7 @@ function showTyping() {
   var t = document.createElement('div'); t.className = 'typing';
   for (var i = 0; i < 3; i++) { var s = document.createElement('span'); t.appendChild(s); }
   b.appendChild(t); typing.appendChild(b); chat.appendChild(typing);
-  chat.scrollTop = chat.scrollHeight;
+  $('#chat').scrollTop = $('#chat').scrollHeight;
 }
 function hideTyping() { if (typing) { typing.remove(); typing = null; } }
 
@@ -161,10 +230,14 @@ async function sendMsg(text) {
 input.addEventListener('keydown', function(e) { if (e.key === 'Enter') sendMsg(input.value); });
 send.addEventListener('click', function() { sendMsg(input.value); });
 
+// Restore sidebar state
+try { if (localStorage.getItem(SIDEBAR_KEY) === '0') { sidebarOpen = false; $('#sidebar').className = 'hidden'; } } catch {}
+
 restore();
 if (messages.length === 0) {
   addMsg('assistant', 'Ananse - Advanced Neural Agent for Network Security Exploitation. Ready. What would you like to do?');
 }
+updateSidebar();
 </script>
 </body>
 </html>
