@@ -241,9 +241,12 @@ export function createCrawlTool() {
     }),
     execute: async ({ target, mode }): Promise<ToolResult> => {
       try {
+        // Resolve user path (~ expansion, common alternatives)
+        const resolvedPath = await resolveUserPath(target);
+        const crawlTarget = resolvedPath ? resolvedPath.path : resolve(target);
         if (mode === "file") {
-          const content = await readFile(resolve(target), "utf-8");
-          const deps = crawlDependencies(resolve(target), content);
+          const content = await readFile(crawlTarget, "utf-8");
+          const deps = crawlDependencies(crawlTarget, content);
           const lines = deps.map((d) => {
             const resolved = d.resolvedPath ? ` → ${d.resolvedPath}` : " (external)";
             const spec = d.specifiers.length ? ` [${d.specifiers.join(", ")}]` : "";
@@ -251,7 +254,7 @@ export function createCrawlTool() {
           });
           return { success: true, data: `Dependencies of ${target}:\n${lines.join("\n")}` };
         } else {
-          const graph = await crawlDirectory(resolve(target));
+          const graph = await crawlDirectory(crawlTarget);
           const lines: string[] = [];
           for (const [file, deps] of Object.entries(graph)) {
             lines.push(`${file}:`);
