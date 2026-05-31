@@ -197,6 +197,7 @@ async function main(): Promise<void> {
   console.log("");
 
   let firstTurn = true;
+  let resumedSession = false;
   let currentSession = createSession(config ?? {}, personality, fileCount);
 
   // Offer to resume a recent session
@@ -216,6 +217,7 @@ async function main(): Promise<void> {
     if (!isCancel(choice) && choice !== "__new__") {
       const loaded = await loadSession(choice as string);
       if (loaded) {
+        resumedSession = true;
         currentSession = loaded;
         const lines = loaded.name
           ? `Resumed session: ${picocolors.cyan(loaded.name)}`
@@ -414,7 +416,7 @@ async function main(): Promise<void> {
 
     console.log(picocolors.dim("\n  ──┤ ") + picocolors.green(input) + picocolors.dim(" ├──"));
     const updatedSession = await runAgentLoop(
-      input, config ?? {}, personality, fileCount, userName, currentSession,
+      input, config ?? {}, personality, fileCount, userName, currentSession, resumedSession,
     );
     if (updatedSession) {
       // Auto-name the session from the first user message

@@ -405,6 +405,7 @@ export async function runAgentLoop(
   fileCount: number,
   userName: string | null,
   session?: Session,
+  resumedSession?: boolean,
 ): Promise<Session | undefined> {
   // -----------------------------------------------------------------------
   // 1. Validate config
@@ -439,8 +440,8 @@ export async function runAgentLoop(
   // 4b. Load session context and mission
   // -----------------------------------------------------------------------
   const sessionCtx = await loadOrCreateContext(currentSession.id);
-  // Only load mission if resuming a session — fresh sessions don't inherit old missions
-  const missionSummary = !isFirstMessage
+  // Only load mission when explicitly resuming a session
+  const missionSummary = resumedSession
     ? await loadLatestMission().then((m) => m ? getMissionSummary() : null).catch(() => null)
     : null;
 
