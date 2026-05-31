@@ -31,9 +31,9 @@ const OWASP_PATTERNS = [
  */
 export function createScanSecretsTool() {
   return tool({
-    description: "Scan project files for hardcoded secrets, API keys, tokens, and private keys. Checks common secret patterns across all non-binary files.",
+    description: "Scan files for hardcoded secrets, API keys, tokens, and private keys. Pass an optional path to scan a specific directory instead of the whole project.",
     inputSchema: z.object({
-      path: z.string().optional().describe("Directory to scan (default: current directory)"),
+      path: z.string().optional().describe("File or directory to scan (default: whole project)"),
     }),
     execute: async ({ path }): Promise<ToolResult> => {
       let scanPath = path ?? ".";

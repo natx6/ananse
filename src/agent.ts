@@ -174,8 +174,9 @@ export function createSystemPrompt(
       ssh_status: "Check SSH connection status (connected to which host, uptime)",
 
       // Scanners
-      scan_secrets: "Scan for hardcoded secrets and API keys",
-      scan_owasp: "Scan for OWASP Top 10 vulnerability patterns",
+      analyze: "Analyze a directory or project — tells you what language, framework, structure, and purpose",
+      scan_secrets: "Scan files for hardcoded secrets, API keys, tokens — pass a path to scan a specific file or directory",
+      scan_owasp: "Scan code for OWASP Top 10 vulnerabilities — pass a path to scan a specific file or directory",
       scan_ports: "TCP port scan on a target host",
       scan_dns: "DNS record lookup",
 
