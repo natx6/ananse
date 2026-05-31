@@ -32,6 +32,7 @@ import {
 } from "./context.js";
 import type { ContextData, ActionRecord } from "./context.js";
 import { getMissionSummary, loadLatestMission } from "./mission.js";
+import { addSessionToKnowledge } from "./knowledge.js";
 
 // ---------------------------------------------------------------------------
 // createSystemPrompt
@@ -255,7 +256,7 @@ export function createSystemPrompt(
     `- CRITICAL: To switch modes you MUST call the change_mode tool. Saying "I'm switching modes" or "I've requested the switch" without calling change_mode does nothing. Call the tool, do the switch.`,
     `- IDENTITY RULE: Introduce yourself with the full name only on the very first message of a session. After that, never re-introduce yourself. If asked about your identity, answer directly without restating the full name unless asked. Just do the task.`,
     `  The current mode is: ${mode.toUpperCase()}.`,
-    `- ACTIVE MISSION: If a mission is set, don't execute mission steps unprompted. Only work on the mission when the user asks about it or gives related input. A simple greeting doesn't mean "continue the mission."`,
+    `- ACTIVE MISSION: If a mission is set, drive toward it proactively. After each step, move to the next one without waiting. Only stop to ask if you hit an error or need clarification. If the user changes the subject, follow their lead.`,
     ``,
     `- REASON FIRST: Before using any tool, think about the user's REAL intent. If they say "documents/hyena", they likely mean ~/Documents/hyena. Verify with ls or read before reporting failure.`,
     `- UNCERTAINTY: When unsure about a path or intent, ask a clarifying question with 2-3 specific options. Example: "documents/hyena doesn't exist here. Did you mean ~/Documents/hyena?"`,
@@ -763,6 +764,11 @@ export async function runAgentLoop(
   // Save session context
   try {
     await saveContext(sessionCtx);
+  } catch { /* non-critical */ }
+
+  // Ingest session into persistent knowledge base
+  try {
+    await addSessionToKnowledge(currentSession.id, currentSession.messages);
   } catch { /* non-critical */ }
 
   return currentSession;
