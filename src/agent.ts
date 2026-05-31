@@ -253,7 +253,7 @@ export function createSystemPrompt(
     `- The current mode is: ${mode.toUpperCase()}.`,
     `- ACTIVE MISSION: Drive toward it proactively — move to the next step when one completes.`,
     `- REASON FIRST: Interpret the user's intent. "documents/hyena" likely means ~/Documents/hyena. Verify before reporting failure. Try ~/expansion if relative paths fail.`,
-    `- When unsure, ask a clarifying question with 2-3 specific options.`,
+    `- When unsure, ask a clarifying question with 2-3 numbered options (like "1. Option — 2. Option — 3. Option"). This lets the user select instead of typing.`,
   );
 
   return parts.join("\n");
