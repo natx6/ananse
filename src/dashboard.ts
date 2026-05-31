@@ -12,8 +12,22 @@
  */
 
 import blessed from "blessed";
+import { streamText } from "ai";
+import { readFileSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { createModelFromConfig } from "./agent.js";
 import { C2Client, resolveClientConfig } from "./c2/client/api.js";
 import type { ReachSummary } from "./c2/types.js";
+import type { AnanseConfig } from "./utils.js";
+
+function loadConfig(): AnanseConfig | null {
+  try {
+    const p = join(homedir(), ".ananse", "config.json");
+    if (existsSync(p)) return JSON.parse(readFileSync(p, "utf-8")) as AnanseConfig;
+  } catch { /* ignore */ }
+  return null;
+}
 
 // ── Tool list helper ─────────────────────────────────────
 function getToolsList(mode: string): string {
@@ -170,7 +184,6 @@ export function createDashboard() {
     if (!msg) return;
     input.clearValue();
     input.focus();
-    addChat("user", msg);
 
     // Quick mode switch
     const m = msg.toLowerCase().trim();
@@ -179,15 +192,66 @@ export function createDashboard() {
       toolsBox.setContent(getToolsList(currentMode));
       updateHeader();
       addChat("assistant", `Switched to ${currentMode} mode.`);
+      screen.render();
       return;
     }
 
     if (m === "fleet" || m === "implants") {
       await refreshFleet();
+      screen.render();
       return;
     }
 
-    addChat("assistant", `[${currentMode}] Echo: ${msg}\n\nUse 'fleet' to check implants, or switch modes with 'offense'/'defense'.`);
+    addChat("user", msg);
+    screen.render();
+
+    // Call AI model
+    const config = loadConfig();
+    if (!config?.apiKey) {
+      addChat("assistant", "No API key configured. Run `ananse configure` first.");
+      screen.render();
+      return;
+    }
+
+    const model = createModelFromConfig(config, currentMode.toLowerCase() as any);
+    if (!model) {
+      addChat("assistant", `No model available for provider: ${config.provider}`);
+      screen.render();
+      return;
+    }
+
+    try {
+      const systemPrompt = `You are Ananse (Advanced Neural Agent for Network Security Exploitation), operating in ${currentMode} mode. Be direct and concise. Answer the user's question.`;
+
+      const result = streamText({
+        model,
+        system: systemPrompt,
+        messages: [
+          ...chatLog.filter((l) => l.role !== "system").slice(-10).map((l) => ({
+            role: l.role as "user" | "assistant",
+            content: l.text,
+          })),
+          { role: "user" as const, content: msg },
+        ],
+        maxRetries: 1,
+      });
+
+      let response = "";
+      for await (const event of result.fullStream) {
+        if (event.type === "text-delta") {
+          response += event.text;
+        }
+      }
+
+      if (response.trim()) {
+        addChat("assistant", response.trim());
+      } else {
+        addChat("assistant", "(no response)");
+      }
+    } catch (err) {
+      addChat("assistant", `Error: ${(err as Error).message}`);
+    }
+    screen.render();
   });
 
   // ── Keybindings ──────────────────────────────────────
