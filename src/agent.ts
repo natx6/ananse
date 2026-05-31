@@ -32,7 +32,6 @@ import {
 } from "./context.js";
 import type { ContextData, ActionRecord } from "./context.js";
 import { getMissionSummary, loadLatestMission } from "./mission.js";
-import { loadProfile, getProfileSummary } from "./profile.js";
 
 // ---------------------------------------------------------------------------
 // createSystemPrompt
@@ -54,7 +53,6 @@ export function createSystemPrompt(
   contextSummary?: string,
   missionSummary?: string | null,
   isFirstMessage?: boolean,
-  userProfile?: string | null,
 ): string {
   const parts: string[] = [];
 
@@ -135,11 +133,6 @@ export function createSystemPrompt(
   // Active mission
   if (missionSummary) {
     parts.push(``, `<mission>`, missionSummary, `</mission>`);
-  }
-
-  // User profile
-  if (userProfile) {
-    parts.push(``, `<user_profile>`, userProfile, `</user_profile>`);
   }
 
   // Tool listing
@@ -455,9 +448,7 @@ export async function runAgentLoop(
   // 5. Build system prompt
   // -----------------------------------------------------------------------
   const contextSummary = getContextSummary(sessionCtx);
-  const profile = await loadProfile().catch(() => null);
-  const userProfileSummary = profile ? getProfileSummary(profile) : null;
-  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined, missionSummary, isFirstMessage, userProfileSummary);
+  const systemPrompt = createSystemPrompt(personality, fileCount, userName, mode, contextSummary || undefined, missionSummary, isFirstMessage);
 
   // -----------------------------------------------------------------------
   // 6. Create tool definitions and filter by mode
