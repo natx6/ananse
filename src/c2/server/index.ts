@@ -91,7 +91,7 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
   app.use(router);
 
   // Web chat UI
-  const webDir = join(dirname(fileURLToPath(import.meta.url)), "web");
+  const webDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "src", "c2", "server", "web");
   app.use(express.static(webDir));
   app.use("/api/chat", createChatRouter(config.apiKey));
 
