@@ -15,7 +15,6 @@ import { createStagerRouter } from "./stager.js";
 import { createWsBroadcaster } from "./ws.js";
 import { createImplantWsServer } from "./implant-ws.js";
 import { createDnsServer } from "./dns.js";
-import { createChatRouter } from "./chat.js";
 import type { C2ServerConfig } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -90,10 +89,7 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
   const router = createRouter(registry, taskQueue, config.apiKey, config.implantToken, broadcast);
   app.use(router);
 
-  // Web chat UI
-  const webDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "src", "c2", "server", "web");
-  app.use(express.static(webDir));
-  app.use("/api/chat", createChatRouter(config.apiKey, process.env.C2_CHAT_API_KEY));
+
 
   let dnsServer: { start: () => Promise<void>; stop: () => Promise<void> } | null = null;
   const dnsDomain = process.env.C2_DNS_DOMAIN;
