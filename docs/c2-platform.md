@@ -52,7 +52,7 @@ The stager token is embedded in the stager binary at build time. Once the stager
 **Start:**
 ```bash
 # Set env vars (recommended)
-export C2_API_KEY="op-key-change-me"
+export C2_API_KEY="REPLACE_THIS_WITH_SECURE_KEY" # WARNING: Change this!
 export C2_IMPLANT_TOKEN="imp-token-change-me"
 export C2_STAGER_TOKEN="stag3r-t0k3n-change"
 export C2_IMPLANT_PATH="/tmp/implant"
