@@ -21,7 +21,6 @@ import { listPlugins } from "./plugin.js";
 import { initKnowledge } from "./knowledge.js";
 import { runAgentLoop } from "./agent.js";
 import { closeSshSession } from "./ssh.js";
-import { createDashboard } from "./dashboard.js";
 import { runBuildLoop } from "./builder.js";
 import { runRefactor } from "./refactor.js";
 import { weaveTypes, weaveDocs } from "./weave.js";
@@ -670,14 +669,6 @@ const program = new Command()
     }
   })
   .action(main);
-
-program
-  .command("dashboard")
-  .description("Terminal dashboard — chat, implants, capabilities in one view")
-  .action(() => {
-    const screen = createDashboard();
-    screen.render();
-  });
 
 program
   .command("status")
