@@ -151,7 +151,8 @@ export function createSystemPrompt(
       subagent: "Spawn a focused sub-agent",
       submit_plan: "Submit a plan for user approval before multi-step ops",
       remember: "Search past sessions and knowledge base",
-      web_fetch: "Fetch a URL and return its content as text — use for docs, CVEs, research",
+      web_fetch: "Fetch a specific URL and return its content as text — use for docs, CVEs, known pages",
+      web_search: "Search the web and return results with titles, snippets, and links — use for finding information online",
       checkpoint: "Create a git checkpoint (auto-stash) before risky changes — enables rollback",
       change_mode: "Switch between NORMAL, OFFENSE, and DEFENSE modes.",
 
@@ -252,7 +253,7 @@ export function createSystemPrompt(
     `- ${introRule}`,
     `- Explain your plan before acting.`,
     `- NEVER delete files without explicit confirmation. NEVER run sudo (no interactive prompts).`,
-    `- If a tool fails, suggest alternatives. If the user wants something unavailable in this mode, call change_mode immediately to switch.`,
+    `- If a tool fails, suggest alternatives. If you need a different mode for the task, switch modes with change_mode then CONTINUE the original task — don't reset to a generic greeting.`,
     `- The current mode is: ${mode.toUpperCase()}.`,
     `- ACTIVE MISSION: Drive toward it proactively — move to the next step when one completes.`,
     `- REASON FIRST: Interpret the user's intent. "documents/hyena" likely means ~/Documents/hyena. Verify before reporting failure. Try ~/expansion if relative paths fail.`,
