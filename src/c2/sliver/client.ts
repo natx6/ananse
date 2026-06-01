@@ -100,39 +100,44 @@ export class SliverClient {
     }
 
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    const host = config.LHost || "localhost";
-    const port = config.LPort || 31337;
-    const cert = Buffer.from(config.Certificate, "base64").toString();
-    const key = Buffer.from(config.PrivateKey, "base64").toString();
-    const ca = Buffer.from(config.CACertificate, "base64").toString();
+    const host = config.lhost || config.LHost || "localhost";
+    const port = config.lport || config.LPort || 31337;
+    // Certificates are stored as PEM strings in the operator config
+    const cert = (config.certificate || config.Certificate || "");
+    const key = (config.private_key || config.PrivateKey || "");
+    const ca = (config.ca_certificate || config.CACertificate || "");
 
-    // Try to load proto definitions from various locations
-    const protoPaths = [
-      resolve(join(dirname(fileURLToPath(import.meta.url)), "..", "sliver-protos", "rpcpb", "services.proto")),
-      resolve(join(homedir(), "sliver-protos", "rpcpb", "services.proto")),
-      resolve(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "sliver-protos", "rpcpb", "services.proto")),
+    // Find Sliver protobuf directory (search both src and dist relative paths)
+    const scriptDir = dirname(fileURLToPath(import.meta.url));
+    const projectRoot = resolve(scriptDir, "..", "..", "..");
+    const protoDirCandidates = [
+      resolve(scriptDir, "..", "sliver-protos"),                                // dist/c2/sliver-protos
+      resolve(projectRoot, "src", "c2", "sliver-protos"),                       // src/c2/sliver-protos
+      resolve(projectRoot, "sliver-protos"),                                     // project-root/sliver-protos
+      resolve(join(homedir(), "sliver-protos")),
     ];
 
-    let protoPath = "";
-    for (const p of protoPaths) {
-      if (existsSync(p)) { protoPath = p; break; }
+    let protoDir = "";
+    for (const d of protoDirCandidates) {
+      if (existsSync(join(d, "rpcpb", "services.proto"))) { protoDir = d; break; }
     }
 
-    if (!protoPath) {
+    if (!protoDir) {
       throw new Error(
         "Sliver protobuf definitions not found.\n" +
-        `Clone them: git clone https://github.com/BishopFox/sliver.git /path/to/sliver-protos\n` +
-        `Then symlink: ln -s /path/to/sliver-protos/protobuf ${join(dirname(fileURLToPath(import.meta.url)), "..", "sliver-protos")}`
+        `Clone: git clone --depth 1 https://github.com/BishopFox/sliver.git /tmp/sliver\n` +
+        `Link: ln -s /tmp/sliver/protobuf ${join(dirname(fileURLToPath(import.meta.url)), "..", "sliver-protos")}`
       );
     }
 
+    const protoPath = join(protoDir, "rpcpb", "services.proto");
     const packageDef = await protoLoader.load(protoPath, {
       keepCase: true,
       longs: String,
       enums: String,
       defaults: true,
       oneofs: true,
-      includeDirs: [dirname(protoPath)],
+      includeDirs: [protoDir],
     });
 
     const rpcpb = grpc.loadPackageDefinition(packageDef) as any;
