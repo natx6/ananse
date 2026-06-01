@@ -36,6 +36,8 @@
     "@ai-sdk/openai": "^3.0.0",
     "@ai-sdk/xai": "^3.0.92",
     "@clack/prompts": "^1.4.0",
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
     "ai": "^6.0.0",
     "base32.js": "^0.1.0",
     "better-sqlite3": "^12.10.0",

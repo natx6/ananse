@@ -208,13 +208,10 @@ export function createSystemPrompt(
       report: "Generate a penetration test report",
 
       // C2 (offense)
-      c2_reach: "List all registered C2 implants — active, dead, destroyed counts and last-seen",
-      c2_deploy: "Build + deploy an implant to an SSH target and wait for beacon",
-      c2_task_create: "Create a new task for a C2 implant (recon, privesc, persistence, exploit, monitor)",
-      c2_task_list: "List tasks for a C2 implant with status and timestamps",
-      c2_task_detail: "Get full details and result output for a specific C2 task",
-      c2_task_cancel: "Cancel a pending C2 task before the implant picks it up",
-      c2_kill: "Send self-destruct command to a C2 implant — removes persistence and wipes binary",
+      c2_reach: "List all registered C2 implants (sessions + beacons) with status, OS, and transport",
+      c2_implant_detail: "Get detailed info about a specific C2 implant (OS, hostname, transport, last seen)",
+      c2_exec: "Execute a shell command on a C2 session implant and get the output",
+      c2_task_list: "List all tasks for a C2 beacon implant with status and timestamps",
 
       // Defense
       monitor_fim_snapshot: "Snapshot critical file hashes for integrity monitoring",
