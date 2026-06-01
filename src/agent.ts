@@ -294,14 +294,19 @@ function toInternalMessage(
 // Tool indicator helpers (for action transparency)
 // ---------------------------------------------------------------------------
 
-const TOOL_SYMBOLS: Record<string, string> = {
-  read: "▷", write: "✎", edit: "✎",
-  command: "▷", search: "▷", crawl: "▷",
-  patch: "▷", blast: "▷", subagent: "▷", remember: "▷", submit_plan: "▷",
+const TOOL_COLORS: Record<string, (s: string) => string> = {
+  read: picocolors.cyan, write: picocolors.green, edit: picocolors.green,
+  command: picocolors.yellow, search: picocolors.cyan, crawl: picocolors.cyan,
+  patch: picocolors.green, blast: picocolors.yellow, subagent: picocolors.magenta,
+  remember: picocolors.blue, submit_plan: picocolors.magenta,
+  change_mode: picocolors.red, analyze: picocolors.cyan,
+  web_fetch: picocolors.blue, checkpoint: picocolors.yellow,
+  scan_secrets: picocolors.cyan, scan_owasp: picocolors.cyan,
+  mission_set: picocolors.magenta, mission_step: picocolors.magenta,
 };
 
 function printToolIndicator(name: string, args: Record<string, unknown>): void {
-  const sym = TOOL_SYMBOLS[name] ?? "▷";
+  const color = TOOL_COLORS[name] ?? picocolors.dim;
   let label = "";
   switch (name) {
     case "read":      label = `read ${args.path}`; break;
@@ -317,7 +322,7 @@ function printToolIndicator(name: string, args: Record<string, unknown>): void {
     case "submit_plan": label = `plan ${(args.title as string)?.slice(0, 60)}`; break;
     default:          label = `${name}`;
   }
-  process.stdout.write(`  ${picocolors.dim(sym + " " + label)}\n`);
+  process.stdout.write(`  ${color("◆")} ${label}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -591,15 +596,17 @@ export async function runAgentLoop(
               });
             }
           }
-          // Display tool result output to user
+          // Display tool result output to user (compact)
           if (event.output && event.toolName !== "change_mode") {
             let output = typeof event.output === "string"
               ? event.output
               : JSON.stringify(event.output, null, 2);
             const lines = output.split("\n");
-            const lineCount = lines.length;
-            if (lineCount > 30) {
-              output = lines.slice(0, 30).join("\n") + `\n${picocolors.dim(`  … ${lineCount - 30} more lines`)}`;
+            // For long outputs, show a preview
+            if (lines.length > 8) {
+              output = lines.slice(0, 6).join("\n") + `\n${picocolors.dim(`  … ${lines.length - 6} more lines`)}`;
+            } else if (output.length > 500) {
+              output = output.slice(0, 500) + `\n${picocolors.dim("  … (truncated)")}`;
             }
             if (output.length > 1) {
               process.stdout.write(`${picocolors.dim(output)}\n`);
