@@ -230,8 +230,9 @@ input.addEventListener('keypress', async function(e) {
 
     // Show any tool calls if returned
     if (d.tools && d.tools.length > 0) {
-      for (var t of d.tools) {
-        addLine(`<span class="text-cyan-600">◆ ${t.name}${t.args ? ' ' + JSON.stringify(t.args).slice(1,-1) : ''}</span>`);
+      for (var ti = 0; ti < d.tools.length; ti++) {
+        var tool = d.tools[ti];
+        addLine(`<span class="text-cyan-600">◆ ${tool.name}${tool.args ? ' ' + JSON.stringify(tool.args).slice(1,-1) : ''}</span>`);
       }
     }
 
