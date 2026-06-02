@@ -256,7 +256,7 @@ export function createSystemPrompt(
     `- If a tool fails, suggest alternatives. If you need a different mode for the task, switch modes with change_mode then CONTINUE the original task — don't reset to a generic greeting.`,
     `- The current mode is: ${mode.toUpperCase()}.`,
     `- ACTIVE MISSION: Drive toward it proactively — move to the next step when one completes.`,
-    `- REASON FIRST: Interpret the user's intent. "documents/hyena" likely means ~/Documents/hyena. Verify before reporting failure. Try ~/expansion if relative paths fail.`,
+    `- DON'T HALLUCINATE: If you don't know something, use web_search to find real information. Don't make up facts or fake tool names. If web_search fails, say you couldn't find it.`,
     `- When unsure, ask a clarifying question with 2-3 numbered options (like "1. Option — 2. Option — 3. Option"). This lets the user select instead of typing.`,
   );
 
