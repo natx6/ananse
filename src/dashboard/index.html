@@ -154,78 +154,32 @@ body { background: #09090b; color: #e0e2e6; font-family: 'JetBrains Mono', monos
 </footer>
 
 <script>
-// Terminal feed
 const feed = document.getElementById('terminalFeed');
 const input = document.getElementById('commandInput');
-const cursor = document.createElement('div');
-cursor.className = 'flex gap-2 mt-4';
-cursor.innerHTML = '<span class="text-white">&gt; ananse:</span><span class="blink">█</span>';
-feed.appendChild(cursor);
+let currentMode = 'NORMAL';
 
 function addLine(html) {
-  const d = document.createElement('div');
-  d.className = 'mt-2';
-  d.innerHTML = html;
-  feed.insertBefore(d, cursor);
+  const d = document.createElement('div'); d.className = 'mt-2'; d.innerHTML = html;
+  feed.insertBefore(d, feed.lastElementChild);
   feed.scrollTop = feed.scrollHeight;
 }
 
-function addCmd(cmd) {
-  const d = document.createElement('div');
-  d.className = 'flex gap-2 mt-2';
-  d.innerHTML = `<span class="text-white">&gt; ananse:</span><span>${cmd.replace(/</g,'&lt;')}</span>`;
-  feed.insertBefore(d, cursor);
-  feed.scrollTop = feed.scrollHeight;
-}
-
-function addTool(name, args) {
-  const d = document.createElement('div');
-  d.className = 'text-cyan-500 font-bold';
-  d.textContent = `◆ ${name}(${JSON.stringify(args).slice(1,-1)})`;
-  feed.insertBefore(d, cursor);
-  feed.scrollTop = feed.scrollHeight;
-}
-
-function addResult(success, msg) {
-  const color = success ? 'text-green-500' : 'text-red-500';
-  const icon = success ? '✓' : '✗';
-  const d = document.createElement('div');
-  d.className = color;
-  d.textContent = `${icon} ${msg.slice(0, 120)}`;
-  feed.insertBefore(d, cursor);
-  feed.scrollTop = feed.scrollHeight;
-}
-
-// Mode switching
 function setMode(mode) {
+  currentMode = mode;
   document.getElementById('modeOffense').className = `border py-2 text-xs uppercase ${mode === 'OFFENSE' ? 'bg-[#991b1b] text-white border-[#991b1b]' : 'border-[#991b1b] text-[#991b1b] hover:bg-red-950/30'}`;
   document.getElementById('modeDefense').className = `border py-2 text-xs uppercase ${mode === 'DEFENSE' ? 'bg-[#0e7490] text-white border-[#0e7490]' : 'border-[#0e7490] text-[#0e7490] hover:bg-cyan-950/30'}`;
   document.getElementById('modeNormal').className = `border py-2 text-xs uppercase ${mode === 'NORMAL' ? 'bg-white text-[#09090b]' : 'border-white text-white hover:bg-white/10'}`;
+  addLine(`<span class="text-cyan-500">◆ Mode switched to ${mode}</span>`);
 }
 
 document.getElementById('modeOffense').onclick = () => setMode('OFFENSE');
 document.getElementById('modeDefense').onclick = () => setMode('DEFENSE');
 document.getElementById('modeNormal').onclick = () => setMode('NORMAL');
 
-// Command handling
-input.addEventListener('keypress', async function(e) {
-  if (e.key !== 'Enter' || !this.value.trim()) return;
-  const cmd = this.value.trim();
-  this.value = '';
-  addCmd(cmd);
-
-  const t = cmd.toLowerCase();
-  if (['offense','defense','normal'].includes(t)) { setMode(t.toUpperCase()); return; }
-  if (t === 'fleet' || t === 'implants') { await refreshFleet(); return; }
-
-  addLine('<span class="opacity-40">Command registered. Processing...</span>');
-});
-
-// API calls
 async function refreshFleet() {
   try {
     const r = await fetch('/api/v1/operator/reach');
-    if (!r.ok) { addLine('<span class="text-red-500">✗ Cannot reach C2 server</span>'); return; }
+    if (!r.ok) return;
     const d = await r.json();
     document.getElementById('fleetCount').textContent = `[ ${String(d.total || 0).padStart(2,'0')}_ONLINE ]`;
     const body = document.getElementById('fleetBody');
@@ -233,20 +187,40 @@ async function refreshFleet() {
       body.innerHTML = '<tr><td colspan="4" class="p-4 text-center opacity-40">No implants registered</td></tr>';
       return;
     }
-    body.innerHTML = d.implants.map(i => `
-      <tr class="hover:bg-[#323538] cursor-pointer">
-        <td class="p-2 border border-[#27272a]">${(i.id || '').slice(0,8)}</td>
-        <td class="p-2 border border-[#27272a]">${i.name || '-'}</td>
-        <td class="p-2 border border-[#27272a]">${i.hostname || '-'}</td>
-        <td class="p-2 border border-[#27272a] ${i.status === 'active' ? 'text-green-500' : 'text-red-500'}">${(i.status || 'unknown').toUpperCase()}</td>
-      </tr>
-    `).join('');
-  } catch {
-    addLine('<span class="text-red-500">✗ Fleet check failed</span>');
-  }
+    body.innerHTML = d.implants.map(i =>
+      `<tr class="hover:bg-[#323538]"><td class="p-2 border border-[#27272a]">${(i.id||'').slice(0,8)}</td><td class="p-2 border border-[#27272a]">${i.hostname||'-'}</td><td class="p-2 border border-[#27272a]">${i.os||'-'}</td><td class="p-2 border border-[#27272a] ${i.status==='active'?'text-green-500':'text-red-500'}">${(i.status||'unknown').toUpperCase()}</td></tr>`
+    ).join('');
+  } catch {}
 }
 
-// Load fleet on startup
+input.addEventListener('keypress', async function(e) {
+  if (e.key !== 'Enter' || !this.value.trim()) return;
+  const cmd = this.value.trim();
+  this.value = '';
+
+  // Quick commands
+  const t = cmd.toLowerCase();
+  if (t === 'fleet' || t === 'implants') { await refreshFleet(); return; }
+  if (['offense','defense','normal'].includes(t)) { setMode(t.toUpperCase()); return; }
+
+  // Show command in terminal
+  addLine(`<span class="text-white font-bold">&gt; ${cmd.replace(/</g,'&lt;')}</span>`);
+  addLine('<span class="opacity-50">◆ Processing...</span>');
+
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: cmd, mode: currentMode})
+    });
+    if (!r.ok) { addLine('<span class="text-red-500">✗ Error contacting AI</span>'); return; }
+    const d = await r.json();
+    addLine(`<span class="text-green-500">${d.response || '(no response)'}</span>`);
+    if (d.mode && d.mode !== currentMode) setMode(d.mode);
+  } catch {
+    addLine('<span class="text-red-500">✗ Connection error</span>');
+  }
+});
+
 refreshFleet();
 </script>
 </body>

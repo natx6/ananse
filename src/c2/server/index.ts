@@ -15,6 +15,7 @@ import { createStagerRouter } from "./stager.js";
 import { createWsBroadcaster } from "./ws.js";
 import { createImplantWsServer } from "./implant-ws.js";
 import { createDnsServer } from "./dns.js";
+import { createChatRouter } from "./chat.js";
 import type { C2ServerConfig } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -92,6 +93,7 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
   // Dashboard (Ananse Control Panel)
   const dashDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "src", "dashboard");
   app.use(express.static(dashDir));
+  app.use("/api/chat", createChatRouter());
 
   // Dashboard data API
   app.get("/api/dashboard/fleet", (_req, res) => {
