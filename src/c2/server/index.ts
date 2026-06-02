@@ -89,6 +89,32 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
   const router = createRouter(registry, taskQueue, config.apiKey, config.implantToken, broadcast);
   app.use(router);
 
+  // Dashboard (Ananse Control Panel)
+  const dashDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "src", "dashboard");
+  app.use(express.static(dashDir));
+
+  // Dashboard data API
+  app.get("/api/dashboard/fleet", (_req, res) => {
+    try { res.json(registry.summary()); }
+    catch { res.json({ total: 0, active: 0, dead: 0, implants: [] }); }
+  });
+
+  app.get("/api/dashboard/missions", async (_req, res) => {
+    try {
+      const { loadLatestMission, getMissionSummary } = await import("../../mission.js");
+      const mission = await loadLatestMission();
+      res.json({ active: mission?.active ?? false, summary: mission ? getMissionSummary() : null });
+    } catch { res.json({ active: false, summary: null }); }
+  });
+
+  app.get("/api/dashboard/sessions", async (_req, res) => {
+    try {
+      const { listSessions } = await import("../../session.js");
+      const all = await listSessions();
+      res.json(all.filter((s: any) => s.messages && s.messages.length > 0).slice(0, 20));
+    } catch { res.json([]); }
+  });
+
   let dnsServer: { start: () => Promise<void>; stop: () => Promise<void> } | null = null;
   const dnsDomain = process.env.C2_DNS_DOMAIN;
   const dnsPort = parseInt(process.env.C2_DNS_PORT || "53", 10);
