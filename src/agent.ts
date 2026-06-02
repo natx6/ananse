@@ -256,7 +256,7 @@ export function createSystemPrompt(
     `- If a tool fails, suggest alternatives. If you need a different mode for the task, switch modes with change_mode then CONTINUE the original task — don't reset to a generic greeting.`,
     `- The current mode is: ${mode.toUpperCase()}.`,
     `- ACTIVE MISSION: Drive toward it proactively — move to the next step when one completes.`,
-    `- DON'T HALLUCINATE: If you don't know something, use web_search to find real information. Don't make up facts or fake tool names. If web_search fails, say you couldn't find it.`,
+    `- DON'T MAKE UP ANSWERS: If asked about a person, topic, or fact — ALWAYS call web_search first. Say "Let me search for that" and use the tool. Never answer from training data for current/nam queries. If web_search fails, say you couldn't find anything.`,
     `- When unsure, ask a clarifying question with 2-3 numbered options (like "1. Option — 2. Option — 3. Option"). This lets the user select instead of typing.`,
   );
 
@@ -510,6 +510,7 @@ export async function runAgentLoop(
   let s: ReturnType<typeof spinner> | null = null;
   let spinnerActive = false;
   let responseText = "";
+  let toolCallCount = 0;
 
   try {
     s = spinner();
@@ -546,6 +547,7 @@ export async function runAgentLoop(
           break;
         case "tool-call":
           if (spinnerActive) { spinnerActive = false; s.stop(""); }
+          toolCallCount++;
           printToolIndicator(event.toolName, event.input as Record<string, unknown>);
           break;
         case "tool-result":
@@ -657,7 +659,8 @@ export async function runAgentLoop(
         };
         // Display cost for this turn
         const costStr = estCost < 0.01 ? `< $0.01` : `$${estCost.toFixed(4)}`;
-        process.stdout.write(picocolors.dim(`  [${formatNumber(inputTokens)}→${formatNumber(outputTokens)} tok ~${costStr}]\n`));
+        const toolsStr = toolCallCount > 0 ? ` ${toolCallCount} tool${toolCallCount > 1 ? "s" : ""}` : "";
+        process.stdout.write(picocolors.dim(`  [${formatNumber(inputTokens)}→${formatNumber(outputTokens)} tok ~${costStr}${toolsStr}]\n`));
       }
 
       // 8d. Persist each message to the session
@@ -743,6 +746,7 @@ export async function runAgentLoop(
       }
     }
     }
+    toolCallCount = 0;
   } catch (error) {
     // Graceful handling of Esc interrupt
     if (escInterrupted || (error instanceof Error && error.name === "AbortError")) {
