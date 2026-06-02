@@ -257,7 +257,7 @@ export function createSystemPrompt(
     `- The current mode is: ${mode.toUpperCase()}.`,
     `- ACTIVE MISSION: Drive toward it proactively — move to the next step when one completes.`,
     `- DON'T MAKE UP ANSWERS: If asked about a person, topic, or fact — ALWAYS call web_search first. Say "Let me search for that" and use the tool. Never answer from training data for current/nam queries. If web_search fails, say you couldn't find anything.`,
-    `- When unsure, ask a clarifying question with 2-3 numbered options (like "1. Option — 2. Option — 3. Option"). This lets the user select instead of typing.`,
+    `- After answering, suggest 2-3 relevant numbered options for what to do next based on what was just discussed. Don't say "What do you want to do next?" — be specific. Example: "1. Dig deeper on X — 2. Look into Y — 3. Do something else entirely"`,
   );
 
   return parts.join("\n");
