@@ -121,7 +121,7 @@ async function barePrompt(): Promise<string | symbol> {
     historySize: 100,
   });
   try {
-    const answer = await rl.question(picocolors.dim("  ── ") + picocolors.green("You » ") + picocolors.reset(""));
+    const answer = await rl.question(picocolors.dim("\n  ── ") + picocolors.green("You » ") + picocolors.reset(""));
     return answer;
   } catch {
     console.log(picocolors.yellow("\nGoodbye."));
