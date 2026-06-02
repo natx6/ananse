@@ -430,7 +430,7 @@ async function main(): Promise<void> {
       continue;
     }
 
-    console.log(picocolors.dim(`\n  ── ${picocolors.green(input)}`));
+    console.log(`\n  ${picocolors.green(input)}`);
     const updatedSession = await runAgentLoop(
       input, config ?? {}, personality, fileCount, userName, currentSession, resumedSession,
     );

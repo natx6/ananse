@@ -529,9 +529,6 @@ export async function runAgentLoop(
 
     // 8a. Stream all events (text + tool calls) to stdout
     let showedPrefix = false;
-    const modeBadge = mode === "offense" ? picocolors.red(picocolors.inverse("  OFFENSE  "))
-      : mode === "defense" ? picocolors.blue(picocolors.inverse("  DEFENSE  "))
-      : "";
 
     for await (const event of result.fullStream) {
       switch (event.type) {
@@ -539,8 +536,7 @@ export async function runAgentLoop(
           if (spinnerActive) { spinnerActive = false; s.stop(""); }
           if (!showedPrefix) {
             showedPrefix = true;
-            if (modeBadge) process.stdout.write(`\n  ${modeBadge} `);
-            process.stdout.write(picocolors.cyan("Ananse » "));
+            process.stdout.write(`\n`);
           }
           responseText += event.text;
           process.stdout.write(event.text);
@@ -599,20 +595,19 @@ export async function runAgentLoop(
               });
             }
           }
-          // Display tool result output to user (compact)
+          // Display tool result output — compact one-liner for success, full for errors
           if (event.output && event.toolName !== "change_mode") {
-            let output = typeof event.output === "string"
+            const out = typeof event.output === "string"
               ? event.output
               : JSON.stringify(event.output, null, 2);
-            const lines = output.split("\n");
-            // For long outputs, show a preview
-            if (lines.length > 8) {
-              output = lines.slice(0, 6).join("\n") + `\n${picocolors.dim(`  … ${lines.length - 6} more lines`)}`;
-            } else if (output.length > 500) {
-              output = output.slice(0, 500) + `\n${picocolors.dim("  … (truncated)")}`;
-            }
-            if (output.length > 1) {
-              process.stdout.write(`${picocolors.dim(output)}\n`);
+            // Extract just the key info for a compact display
+            const firstLine = out.split("\n")[0]?.replace(/^\{?"(success|data|error)":"?/g, "").replace(/",?".*$/, "").trim();
+            if (firstLine && firstLine.length < 80 && !firstLine.includes("\\n")) {
+              process.stdout.write(`${picocolors.dim(`  ${firstLine}`)}\n`);
+            } else if (out.length > 200) {
+              process.stdout.write(`${picocolors.dim(`  ${out.slice(0, 200).replace(/\n/g, " ")}…`)}\n`);
+            } else {
+              process.stdout.write(`${picocolors.dim(out)}\n`);
             }
           }
           // Mid-turn checkpoint: save session after each tool call
@@ -659,8 +654,8 @@ export async function runAgentLoop(
         };
         // Display cost for this turn
         const costStr = estCost < 0.01 ? `< $0.01` : `$${estCost.toFixed(4)}`;
-        const toolsStr = toolCallCount > 0 ? ` ${toolCallCount} tool${toolCallCount > 1 ? "s" : ""}` : "";
-        process.stdout.write(picocolors.dim(`  [${formatNumber(inputTokens)}→${formatNumber(outputTokens)} tok ~${costStr}${toolsStr}]\n`));
+        const toolsStr = toolCallCount > 0 ? ` · ${toolCallCount} tool${toolCallCount > 1 ? "s" : ""}` : "";
+        process.stdout.write(picocolors.dim(`  ${formatNumber(inputTokens)} tok in → ${formatNumber(outputTokens)} out${toolsStr} · ${costStr}\n`));
       }
 
       // 8d. Persist each message to the session
