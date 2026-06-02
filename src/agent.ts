@@ -549,8 +549,13 @@ export async function runAgentLoop(
           if (spinnerActive) { spinnerActive = false; s.stop(""); }
           toolCallCount++;
           printToolIndicator(event.toolName, event.input as Record<string, unknown>);
+          // Show spinner while tool runs
+          s = spinner();
+          s.start();
+          spinnerActive = true;
           break;
         case "tool-result":
+          if (spinnerActive) { spinnerActive = false; s.stop(""); }
           // Mode switch indicator
           if (event.toolName === "change_mode") {
             const input = event.input as { mode?: string } | undefined;
