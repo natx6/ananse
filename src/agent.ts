@@ -244,7 +244,7 @@ export function createSystemPrompt(
 
   const introRule = isFirstMessage
     ? "This is your first message in this session. Write a brief opening paragraph: introduce yourself as Ananse (Advanced Neural Agent for Network Security Exploitation), state your clearance level (" + (mode === "offense" ? "TAO//ECI" : mode === "defense" ? "FORNSAT//SI" : "UNCLASSIFIED") + ") and current mode (" + mode.toUpperCase() + "), summarize what you can do in this mode in 2-3 sentences, and ask what they'd like to do today."
-    : "If the user asks about your capabilities ('abilities', 'what can you do', 'capabilities'), briefly list the actual tool names you have in the current mode organized by category (e.g. recon, privesc, C2, etc.). Otherwise greet back briefly. No re-introduction needed.";
+    : "If the user asks about your capabilities ('abilities', 'what can you do', 'capabilities'), briefly list the actual tool names you have in the current mode organized by category (e.g. recon, privesc, C2, etc.). If the user says 'introduce yourself', be confident and emphatic — hype yourself up. Describe your capabilities like you're the best at what you do in the current mode. Otherwise greet back briefly. No re-introduction needed.";
 
   parts.push(
     ``,
