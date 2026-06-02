@@ -117,6 +117,29 @@ export function startServer(cfg: Partial<C2ServerConfig> = {}): { close: () => v
     } catch { res.json([]); }
   });
 
+  app.get("/api/dashboard/stats", (_req, res) => {
+    const mem = process.memoryUsage();
+    const uptime = Math.floor(process.uptime());
+    const hrs = Math.floor(uptime / 3600);
+    const mins = Math.floor((uptime % 3600) / 60);
+    res.json({
+      cpu: (process.cpuUsage?.()?.user ?? 0) / 1000000 + "%",
+      mem: Math.round(mem.rss / 1024 / 1024) + "MB",
+      uptime: hrs + "h " + mins + "m",
+      sessions: registry.summary().total || 0,
+    });
+  });
+
+  app.get("/api/dashboard/search", async (req, res) => {
+    try {
+      const query = (req.query.q as string) || "";
+      if (!query) { res.json({ results: [] }); return; }
+      const { searchKnowledge } = await import("../../knowledge.js");
+      const entries = await searchKnowledge(query, 10);
+      res.json({ results: entries.map((e: any) => ({ name: e.id?.slice(0, 8), snippet: e.content?.slice(0, 200) })) });
+    } catch { res.json({ results: [] }); }
+  });
+
   let dnsServer: { start: () => Promise<void>; stop: () => Promise<void> } | null = null;
   const dnsDomain = process.env.C2_DNS_DOMAIN;
   const dnsPort = parseInt(process.env.C2_DNS_PORT || "53", 10);

@@ -222,7 +222,46 @@ input.addEventListener('keypress', async function(e) {
   }
 });
 
+async function refreshMissions() {
+  try {
+    const r = await fetch('/api/dashboard/missions');
+    if (!r.ok) return;
+    const d = await r.json();
+    const el = document.getElementById('missionList');
+    if (!d.active || !d.summary) { el.innerHTML = '<div class="text-xs opacity-40">No active missions</div>'; return; }
+    el.innerHTML = '<div class="text-xs whitespace-pre-wrap opacity-80">' + d.summary.replace(/\n/g, '<br>') + '</div>';
+  } catch {}
+}
+
+async function refreshStats() {
+  try {
+    const r = await fetch('/api/dashboard/stats');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('sysStats').innerHTML = '<span>CPU: ' + (d.cpu || '--') + '</span><span>MEM: ' + (d.mem || '--') + '</span>';
+    document.getElementById('uptimeDisplay').textContent = 'Uptime: ' + (d.uptime || '--');
+    document.getElementById('sessionId').textContent = 'Sessions: ' + (d.sessions || '0');
+  } catch {}
+}
+
+document.getElementById('searchInput').addEventListener('keypress', async function(e) {
+  if (e.key !== 'Enter' || !this.value.trim()) return;
+  const q = this.value.trim();
+  const el = document.getElementById('knowledgeList');
+  el.innerHTML = '<div class="text-xs opacity-40">Searching...</div>';
+  try {
+    const r = await fetch('/api/dashboard/search?q=' + encodeURIComponent(q));
+    const d = await r.json();
+    if (!d.results || d.results.length === 0) { el.innerHTML = '<div class="text-xs opacity-40">No results found</div>'; return; }
+    el.innerHTML = d.results.map(function(r) { return '<div class="text-xs"><span class="text-white">' + (r.file || r.name || '') + '</span><br><span class="opacity-50">' + (r.snippet || '') + '</span></div>'; }).join('<br>');
+  } catch { el.innerHTML = '<div class="text-xs opacity-40">Search failed</div>'; }
+});
+
 refreshFleet();
+refreshMissions();
+refreshStats();
+setInterval(refreshFleet, 30000);
+setInterval(refreshStats, 10000);
 </script>
 </body>
 </html>
