@@ -32,8 +32,9 @@ export function createChatRouter() {
       const model = createModelFromConfig(config, (mode || "NORMAL").toLowerCase() as any);
       if (!model) return res.status(400).json({ error: `No model for ${config.provider}` });
 
-      // Use the same system prompt as the terminal version
-      const systemPrompt = createSystemPrompt(null, 0, config.userName || null, (mode || "NORMAL").toLowerCase() as any);
+      // Use the terminal system prompt with persona enforcement
+      const basePrompt = createSystemPrompt(null, 0, config.userName || null, (mode || "NORMAL").toLowerCase() as any);
+      const systemPrompt = basePrompt + `\n\nIMPORTANT: Always introduce yourself with clearance level and mode when asked. Be direct and competent. Respond conversationally but maintain the operational tone of your current clearance level.`;
 
       const result = streamText({ model, system: systemPrompt, messages: [{ role: "user", content: message }], maxRetries: 1 });
 
