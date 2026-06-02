@@ -204,8 +204,7 @@ input.addEventListener('keypress', async function(e) {
   if (['offense','defense','normal'].includes(t)) { setMode(t.toUpperCase()); return; }
 
   // Show command in terminal
-  addLine(`<span class="text-white font-bold">&gt; ${cmd.replace(/</g,'&lt;')}</span>`);
-  addLine('<span class="opacity-50">◆ Processing...</span>');
+  addLine(`<span class="text-blue-400 font-bold">You &gt;</span> <span class="text-white">${cmd.replace(/</g,'&lt;')}</span>`);
 
   try {
     const r = await fetch('/api/chat', {
@@ -214,7 +213,7 @@ input.addEventListener('keypress', async function(e) {
     });
     if (!r.ok) { addLine('<span class="text-red-500">✗ Error contacting AI</span>'); return; }
     const d = await r.json();
-    addLine(`<span class="text-green-500">${d.response || '(no response)'}</span>`);
+    addLine(`<span class="text-cyan-400 font-bold">Ananse &gt;</span> <span class="text-green-300">${d.response || '(no response)'}</span>`);
     if (d.mode && d.mode !== currentMode) setMode(d.mode);
   } catch {
     addLine('<span class="text-red-500">✗ Connection error</span>');

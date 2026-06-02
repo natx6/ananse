@@ -28,7 +28,7 @@ export function createChatRouter() {
       const model = createModelFromConfig(config, (mode || "NORMAL").toLowerCase() as any);
       if (!model) return res.status(400).json({ error: `No model for ${config.provider}` });
 
-      const systemPrompt = `You are Ananse (Advanced Neural Agent for Network Security Exploitation), operating in ${mode || "NORMAL"} mode. Be direct and concise. Answer the user's question or execute their request.`;
+      const systemPrompt = `You are Ananse, an AI assistant operating in ${mode || "NORMAL"} mode. Be conversational and natural — like you're chatting with a friend. Don't be robotic or use mission-brief language. Answer questions, help with tasks, and be helpful. Keep responses concise.`;
 
       const result = streamText({ model, system: systemPrompt, messages: [{ role: "user", content: message }], maxRetries: 1 });
 
