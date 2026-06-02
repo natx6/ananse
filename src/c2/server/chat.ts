@@ -3,7 +3,7 @@ import { streamText } from "ai";
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createModelFromConfig } from "../../agent.js";
+import { createModelFromConfig, createSystemPrompt } from "../../agent.js";
 import type { AnanseConfig } from "../../utils.js";
 
 function loadConfig(): AnanseConfig | null {
@@ -13,6 +13,10 @@ function loadConfig(): AnanseConfig | null {
   } catch { return null; }
   return null;
 }
+
+const MODE_TAG: Record<string, string> = {
+  offense: "TAO//ECI", defense: "FORNSAT//SI", normal: "UNCLASSIFIED",
+};
 
 export function createChatRouter() {
   const router = Router();
@@ -28,7 +32,8 @@ export function createChatRouter() {
       const model = createModelFromConfig(config, (mode || "NORMAL").toLowerCase() as any);
       if (!model) return res.status(400).json({ error: `No model for ${config.provider}` });
 
-      const systemPrompt = `You are Ananse, an AI assistant operating in ${mode || "NORMAL"} mode. Be conversational and natural — like you're chatting with a friend. Don't be robotic or use mission-brief language. Answer questions, help with tasks, and be helpful. Keep responses concise.`;
+      // Use the same system prompt as the terminal version
+      const systemPrompt = createSystemPrompt(null, 0, config.userName || null, (mode || "NORMAL").toLowerCase() as any);
 
       const result = streamText({ model, system: systemPrompt, messages: [{ role: "user", content: message }], maxRetries: 1 });
 
