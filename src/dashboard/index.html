@@ -208,16 +208,38 @@ input.addEventListener('keypress', async function(e) {
   // Show command in terminal
   addLine(`<span class="text-gray-500 font-bold">You &gt;</span> <span class="text-gray-300">${cmd.replace(/</g,'&lt;')}</span>`);
 
+  // Typing indicator
+  var typingId = 'typing-' + Date.now();
+  addLine(`<span class="opacity-40 text-xs blink" id="${typingId}">■ Ananse is thinking...</span>`);
+
   try {
     const r = await fetch('/api/chat', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({message: cmd, mode: currentMode})
     });
+    var typingEl = document.getElementById(typingId);
+    if (typingEl) typingEl.remove();
+
     if (!r.ok) { addLine('<span class="text-red-500">✗ Error contacting AI</span>'); return; }
     const d = await r.json();
-    addLine(`<span class="text-gray-300 font-bold">Ananse &gt;</span> <span class="text-gray-200">${d.response || '(no response)'}</span>`);
+
+    // Format response: **bold** → <b>bold</b>, newlines → <br>
+    var resp = (d.response || '(no response)').replace(/</g,'&lt;');
+    resp = resp.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    resp = resp.replace(/\n/g, '<br>');
+
+    // Show any tool calls if returned
+    if (d.tools && d.tools.length > 0) {
+      for (var t of d.tools) {
+        addLine(`<span class="text-cyan-600">◆ ${t.name}${t.args ? ' ' + JSON.stringify(t.args).slice(1,-1) : ''}</span>`);
+      }
+    }
+
+    addLine(`<span class="text-gray-300 font-bold">Ananse &gt;</span> <span class="text-gray-200">${resp}</span>`);
     if (d.mode && d.mode !== currentMode) setMode(d.mode);
   } catch {
+    var typingEl2 = document.getElementById(typingId);
+    if (typingEl2) typingEl2.remove();
     addLine('<span class="text-red-500">✗ Connection error</span>');
   }
 });

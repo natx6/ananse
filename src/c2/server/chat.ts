@@ -4,6 +4,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createModelFromConfig, createSystemPrompt } from "../../agent.js";
+import { createAllTools } from "../../toolRegistry.js";
+import { filterToolsByMode } from "../../mode.js";
 import type { AnanseConfig } from "../../utils.js";
 
 function loadConfig(): AnanseConfig | null {
@@ -36,14 +38,23 @@ export function createChatRouter() {
       const basePrompt = createSystemPrompt(null, 0, config.userName || null, (mode || "NORMAL").toLowerCase() as any);
       const systemPrompt = basePrompt + `\n\nIMPORTANT: Always introduce yourself with clearance level and mode when asked. Be direct and competent. Respond conversationally but maintain the operational tone of your current clearance level.`;
 
-      const result = streamText({ model, system: systemPrompt, messages: [{ role: "user", content: message }], maxRetries: 1 });
+      const allTools = filterToolsByMode(createAllTools(config), (mode || "NORMAL").toLowerCase() as any);
+      const result = streamText({ model, system: systemPrompt, messages: [{ role: "user", content: message }], tools: allTools as any, maxRetries: 1 });
 
       let response = "";
+      const tools: Array<{ name: string; args: Record<string, unknown> }> = [];
       for await (const event of result.fullStream) {
         if (event.type === "text-delta") response += event.text;
+        if (event.type === "tool-call") {
+          tools.push({ name: event.toolName, args: event.input as Record<string, unknown> });
+        }
       }
 
-      res.json({ response: response.trim() || "(no response)", mode: mode || "NORMAL" });
+      res.json({
+        response: response.trim() || "(no response)",
+        mode: mode || "NORMAL",
+        tools: tools.length > 0 ? tools : undefined,
+      });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
