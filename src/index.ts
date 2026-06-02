@@ -196,6 +196,25 @@ async function main(): Promise<void> {
   console.log(picocolors.dim(`  ${summaryParts.join(" | ")}`));
   console.log("");
 
+  // Auto-connect to Sliver C2 backend
+  if (!process.env.C2_SLIVER_DISABLE) {
+    try {
+      const { SliverClient } = await import("./c2/sliver/client.js");
+      const sliver = new SliverClient(process.env.C2_SLIVER_OPERATOR || "ananse");
+      await sliver.connect();
+      const { sessions, beacons } = await sliver.getFleet();
+      const total = sessions.length + beacons.length;
+      if (total > 0) {
+        console.log(picocolors.green(`  Sliver: ${total} implant${total === 1 ? "" : "s"} connected (${sessions.length} session${sessions.length === 1 ? "" : "s"}, ${beacons.length} beacon${beacons.length === 1 ? "" : "s"})`));
+      } else {
+        console.log(picocolors.dim("  Sliver: connected — no implants yet"));
+      }
+    } catch (e) {
+      console.log(picocolors.dim(`  Sliver: not available (${(e as Error).message})`));
+    }
+    console.log("");
+  }
+
   let firstTurn = true;
   let resumedSession = false;
   let currentSession = createSession(config ?? {}, personality, fileCount);
