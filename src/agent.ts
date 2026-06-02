@@ -604,20 +604,20 @@ export async function runAgentLoop(
               });
             }
           }
-          // Display tool result output to user (compact)
+          // Display tool result — clean one-liner
           if (event.output && event.toolName !== "change_mode") {
-            let output = typeof event.output === "string"
+            const raw = typeof event.output === "string"
               ? event.output
-              : JSON.stringify(event.output, null, 2);
-            const lines = output.split("\n");
-            // For long outputs, show a preview
-            if (lines.length > 8) {
-              output = lines.slice(0, 6).join("\n") + `\n${picocolors.dim(`  … ${lines.length - 6} more lines`)}`;
-            } else if (output.length > 500) {
-              output = output.slice(0, 500) + `\n${picocolors.dim("  … (truncated)")}`;
-            }
-            if (output.length > 1) {
-              process.stdout.write(`${picocolors.dim(output)}\n`);
+              : JSON.stringify(event.output);
+            const isSuccess = !raw.includes('"success": false');
+            const errorMsg = raw.match(/"error":"([^"]+)"/)?.[1];
+            const dataContent = raw.match(/"data":"([^"]+)"/)?.[1];
+            if (errorMsg) {
+              process.stdout.write(`  ${picocolors.red("✗")} ${errorMsg.slice(0, 120)}\n`);
+            } else if (isSuccess && dataContent) {
+              process.stdout.write(`  ${picocolors.green("✓")} ${picocolors.dim(dataContent.slice(0, 120))}\n`);
+            } else {
+              process.stdout.write(`  ${picocolors.green("✓")} ${event.toolName}\n`);
             }
           }
           // Mid-turn checkpoint: save session after each tool call
